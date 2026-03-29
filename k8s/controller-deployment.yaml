@@ -1,0 +1,63 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: session-controller
+  namespace: session-test
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: session-controller
+rules:
+  - apiGroups: [""]
+    resources: ["endpoints", "pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: session-controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: session-controller
+subjects:
+  - kind: ServiceAccount
+    name: session-controller
+    namespace: session-test
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: session-controller
+  namespace: session-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: session-controller
+  template:
+    metadata:
+      labels:
+        app: session-controller
+    spec:
+      serviceAccountName: session-controller
+      containers:
+        - name: controller
+          image: session-controller:test
+          imagePullPolicy: Never
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 64Mi

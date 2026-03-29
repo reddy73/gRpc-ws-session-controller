@@ -1,0 +1,23 @@
+# Go
+go/vendor/
+go/*.exe
+go/*.test
+go/coverage.out
+
+# Java
+java/target/
+java/.mvn/
+*.class
+*.jar
+
+# Docker
+.dockerignore
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
