@@ -3,516 +3,563 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>gRPC/WebSocket Session Survivability for Kubernetes</title>
+<title>reddy73 / gRpc-ws-session-controller</title>
 <style>
-  :root {
-    --bg: #0f1117;
-    --surface: #1a1d27;
-    --surface2: #22263a;
-    --border: #2e3250;
-    --accent: #7c6af7;
-    --accent2: #56cfb2;
-    --accent3: #f7a76c;
-    --text: #e2e4f0;
-    --muted: #8b90b0;
-    --code-bg: #12141e;
-    --safe: #2d6a4f;
-    --safe-text: #74c69d;
-    --unsafe: #6b2737;
-    --unsafe-text: #f4a0b0;
-    --cond: #5c4a1e;
-    --cond-text: #f4c97a;
-    --sidebar-w: 280px;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.7; display: flex; min-height: 100vh; }
+:root {
+  --gh-bg: #ffffff;
+  --gh-canvas: #f6f8fa;
+  --gh-border: #d0d7de;
+  --gh-border-muted: #e8eaed;
+  --gh-text: #1f2328;
+  --gh-muted: #656d76;
+  --gh-link: #0969da;
+  --gh-accent: #0969da;
+  --gh-green: #1a7f37;
+  --gh-header: #24292f;
+  --gh-header-text: #f0f6fc;
+  --gh-code-bg: #f6f8fa;
+  --gh-code-border: #d0d7de;
+  --gh-pre-bg: #f6f8fa;
+  --gh-tag-bg: #ddf4ff;
+  --gh-tag-text: #0550ae;
+  --gh-tag-border: #54aeff66;
+  --gh-safe-bg: #dafbe1;
+  --gh-safe-text: #116329;
+  --gh-unsafe-bg: #ffebe9;
+  --gh-unsafe-text: #82071e;
+  --gh-cond-bg: #fff8c5;
+  --gh-cond-text: #7d4e00;
+  --sidebar-w: 260px;
+  --content-max: 860px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--gh-bg); color: var(--gh-text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.6; }
 
-  /* Sidebar */
-  nav { width: var(--sidebar-w); min-width: var(--sidebar-w); background: var(--surface); border-right: 1px solid var(--border); position: fixed; top: 0; left: 0; height: 100vh; overflow-y: auto; padding: 24px 0; z-index: 100; }
-  nav .logo { padding: 0 20px 20px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
-  nav .logo h1 { font-size: 13px; font-weight: 700; color: var(--accent); letter-spacing: .05em; text-transform: uppercase; }
-  nav .logo p { font-size: 11px; color: var(--muted); margin-top: 4px; }
-  nav a { display: block; padding: 6px 20px; font-size: 13px; color: var(--muted); text-decoration: none; border-left: 2px solid transparent; transition: all .15s; }
-  nav a:hover { color: var(--text); background: var(--surface2); }
-  nav a.active { color: var(--accent); border-left-color: var(--accent); background: rgba(124,106,247,.08); }
-  nav .section-label { padding: 14px 20px 4px; font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; }
-  nav .sub { padding-left: 32px; font-size: 12px; }
+/* ── Top nav bar ── */
+.gh-topbar { background: var(--gh-header); height: 48px; display: flex; align-items: center; padding: 0 16px; gap: 16px; position: sticky; top: 0; z-index: 200; }
+.gh-topbar svg { fill: var(--gh-header-text); opacity: .8; flex-shrink: 0; }
+.gh-topbar .repo-path { color: var(--gh-header-text); font-size: 14px; display: flex; align-items: center; gap: 6px; }
+.gh-topbar .repo-path a { color: rgba(240,246,252,.7); text-decoration: none; }
+.gh-topbar .repo-path a:hover { color: var(--gh-header-text); text-decoration: underline; }
+.gh-topbar .repo-path .sep { color: rgba(240,246,252,.4); }
+.gh-topbar .repo-path .repo-name { color: var(--gh-header-text); font-weight: 600; }
+.gh-topbar .spacer { flex: 1; }
+.gh-topbar .star-btn { background: rgba(255,255,255,.1); border: 1px solid rgba(240,246,252,.2); color: var(--gh-header-text); border-radius: 6px; padding: 4px 12px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 6px; }
 
-  /* Main */
-  main { margin-left: var(--sidebar-w); flex: 1; max-width: 900px; padding: 48px 56px; }
+/* ── Repo header ── */
+.repo-header { background: var(--gh-bg); border-bottom: 1px solid var(--gh-border); padding: 16px 24px 0; }
+.repo-header .breadcrumb { font-size: 20px; font-weight: 400; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.repo-header .breadcrumb .owner { color: var(--gh-link); text-decoration: none; font-weight: 400; }
+.repo-header .breadcrumb .owner:hover { text-decoration: underline; }
+.repo-header .breadcrumb .slash { color: var(--gh-muted); font-weight: 300; }
+.repo-header .breadcrumb .name { font-weight: 600; color: var(--gh-link); }
+.repo-header .visibility { background: var(--gh-canvas); border: 1px solid var(--gh-border); border-radius: 2em; padding: 1px 8px; font-size: 11px; color: var(--gh-muted); font-weight: 500; }
+.repo-header .desc { color: var(--gh-muted); font-size: 14px; margin: 6px 0 12px; }
+.repo-header .topics { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.topic { background: var(--gh-tag-bg); color: var(--gh-tag-text); border: 1px solid var(--gh-tag-border); border-radius: 2em; padding: 2px 10px; font-size: 12px; font-weight: 500; text-decoration: none; }
+.topic:hover { background: #0969da; color: #fff; }
+.repo-tabs { display: flex; gap: 0; margin-top: 4px; }
+.repo-tab { padding: 8px 16px; font-size: 14px; color: var(--gh-muted); text-decoration: none; border-bottom: 2px solid transparent; cursor: pointer; background: none; border-top: none; border-left: none; border-right: none; display: flex; align-items: center; gap: 6px; transition: color .1s; }
+.repo-tab:hover { color: var(--gh-text); border-bottom-color: var(--gh-border); }
+.repo-tab.active { color: var(--gh-text); border-bottom-color: #fd8c73; font-weight: 600; }
+.repo-tab .count { background: var(--gh-canvas); border: 1px solid var(--gh-border); border-radius: 2em; padding: 0 6px; font-size: 11px; font-weight: 500; }
 
-  /* Page tabs */
-  .tabs { display: flex; gap: 4px; margin-bottom: 40px; border-bottom: 1px solid var(--border); padding-bottom: 0; }
-  .tab-btn { padding: 10px 20px; background: none; border: none; border-bottom: 2px solid transparent; color: var(--muted); font-size: 14px; font-weight: 500; cursor: pointer; transition: all .15s; margin-bottom: -1px; }
-  .tab-btn:hover { color: var(--text); }
-  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
-  .tab-page { display: none; }
-  .tab-page.active { display: block; }
+/* ── Layout ── */
+.layout { display: flex; max-width: 1280px; margin: 0 auto; padding: 24px 16px; gap: 24px; }
+.sidebar { width: var(--sidebar-w); flex-shrink: 0; }
+.content { flex: 1; min-width: 0; max-width: var(--content-max); }
 
-  /* Typography */
-  h1 { font-size: 28px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
-  h2 { font-size: 20px; font-weight: 600; color: var(--text); margin: 40px 0 14px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
-  h3 { font-size: 16px; font-weight: 600; color: var(--accent2); margin: 28px 0 10px; }
-  h4 { font-size: 14px; font-weight: 600; color: var(--accent3); margin: 20px 0 8px; }
-  p { margin-bottom: 14px; color: var(--text); }
-  a { color: var(--accent); text-decoration: none; }
-  a:hover { text-decoration: underline; }
-  ul, ol { margin: 0 0 14px 22px; }
-  li { margin-bottom: 4px; }
-  strong { color: var(--text); font-weight: 600; }
-  hr { border: none; border-top: 1px solid var(--border); margin: 36px 0; }
-  .subtitle { color: var(--muted); font-size: 16px; margin-bottom: 32px; }
+/* ── Sidebar widgets ── */
+.widget { border: 1px solid var(--gh-border); border-radius: 6px; margin-bottom: 16px; overflow: hidden; }
+.widget-header { padding: 10px 16px; font-size: 14px; font-weight: 600; border-bottom: 1px solid var(--gh-border); background: var(--gh-canvas); display: flex; justify-content: space-between; align-items: center; }
+.widget-body { padding: 12px 16px; }
+.widget-body p { font-size: 13px; color: var(--gh-muted); margin-bottom: 10px; }
+.stat-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 13px; color: var(--gh-text); }
+.stat-row svg { fill: var(--gh-muted); flex-shrink: 0; }
+.stat-row a { color: var(--gh-link); text-decoration: none; }
+.stat-row a:hover { text-decoration: underline; }
+.lang-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+.file-tree { list-style: none; font-size: 13px; }
+.file-tree li { display: flex; align-items: center; gap: 6px; padding: 3px 0; color: var(--gh-link); cursor: pointer; }
+.file-tree li:hover { text-decoration: underline; }
+.file-tree li svg { fill: var(--gh-muted); flex-shrink: 0; }
+.file-tree .dir { color: var(--gh-text); font-weight: 500; }
+.file-tree .dir svg { fill: #54aeff; }
 
-  /* Code */
-  code { background: var(--code-bg); color: var(--accent2); padding: 2px 6px; border-radius: 4px; font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace; font-size: 13px; border: 1px solid var(--border); }
-  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 20px; overflow-x: auto; margin: 16px 0 20px; position: relative; }
-  pre code { background: none; border: none; padding: 0; color: var(--text); font-size: 13px; line-height: 1.6; }
-  .lang-tag { position: absolute; top: 8px; right: 12px; font-size: 10px; color: var(--muted); font-family: monospace; text-transform: uppercase; letter-spacing: .05em; }
+/* ── Commit bar ── */
+.commit-bar { background: var(--gh-canvas); border: 1px solid var(--gh-border); border-radius: 6px; padding: 10px 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.commit-bar .avatar { width: 20px; height: 20px; border-radius: 50%; background: linear-gradient(135deg,#0969da,#8250df); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 10px; font-weight: 700; flex-shrink: 0; }
+.commit-bar .msg { flex: 1; color: var(--gh-text); font-weight: 500; }
+.commit-bar .meta { color: var(--gh-muted); }
+.commit-bar .sha { font-family: monospace; background: var(--gh-code-bg); border: 1px solid var(--gh-border); border-radius: 4px; padding: 1px 6px; font-size: 12px; color: var(--gh-link); }
 
-  /* Syntax highlight tokens */
-  .kw  { color: #c792ea; }
-  .fn  { color: #82aaff; }
-  .str { color: #c3e88d; }
-  .cm  { color: #546e7a; font-style: italic; }
-  .tp  { color: #ffcb6b; }
-  .num { color: #f78c6c; }
-  .op  { color: #89ddff; }
+/* ── README card ── */
+.readme-card { border: 1px solid var(--gh-border); border-radius: 6px; overflow: hidden; }
+.readme-header { background: var(--gh-canvas); border-bottom: 1px solid var(--gh-border); padding: 10px 16px; display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
+.readme-header svg { fill: var(--gh-muted); }
+.readme-body { padding: 24px 32px; }
 
-  /* Tables */
-  table { width: 100%; border-collapse: collapse; margin: 16px 0 24px; font-size: 13px; }
-  th { background: var(--surface2); color: var(--muted); font-weight: 600; text-align: left; padding: 10px 14px; border: 1px solid var(--border); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
-  td { padding: 9px 14px; border: 1px solid var(--border); vertical-align: top; }
-  tr:nth-child(even) td { background: rgba(255,255,255,.02); }
+/* ── Markdown content ── */
+.md h1 { font-size: 28px; font-weight: 600; padding-bottom: 10px; border-bottom: 1px solid var(--gh-border); margin-bottom: 16px; margin-top: 24px; }
+.md h1:first-child { margin-top: 0; }
+.md h2 { font-size: 20px; font-weight: 600; padding-bottom: 8px; border-bottom: 1px solid var(--gh-border); margin: 24px 0 12px; }
+.md h3 { font-size: 16px; font-weight: 600; margin: 20px 0 8px; }
+.md h4 { font-size: 14px; font-weight: 600; margin: 16px 0 6px; color: var(--gh-muted); }
+.md p { margin-bottom: 12px; line-height: 1.7; }
+.md a { color: var(--gh-link); text-decoration: none; }
+.md a:hover { text-decoration: underline; }
+.md ul, .md ol { margin: 0 0 12px 24px; }
+.md li { margin-bottom: 4px; line-height: 1.6; }
+.md strong { font-weight: 600; }
+.md hr { border: none; border-top: 1px solid var(--gh-border); margin: 24px 0; }
+.md blockquote { border-left: 4px solid var(--gh-border); padding: 4px 16px; color: var(--gh-muted); margin: 12px 0; }
+.md code { background: var(--gh-code-bg); border: 1px solid var(--gh-code-border); border-radius: 6px; padding: 2px 6px; font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; font-size: 85%; }
+.md pre { background: var(--gh-pre-bg); border: 1px solid var(--gh-border); border-radius: 6px; padding: 16px; overflow-x: auto; margin: 12px 0 16px; position: relative; }
+.md pre code { background: none; border: none; padding: 0; font-size: 13px; line-height: 1.6; }
+.lang-tag { position: absolute; top: 8px; right: 12px; font-size: 10px; color: var(--gh-muted); font-family: monospace; text-transform: uppercase; letter-spacing: .05em; }
+.md table { border-collapse: collapse; width: 100%; margin: 12px 0 16px; font-size: 14px; display: block; overflow-x: auto; }
+.md th { background: var(--gh-canvas); font-weight: 600; text-align: left; padding: 8px 13px; border: 1px solid var(--gh-border); }
+.md td { padding: 7px 13px; border: 1px solid var(--gh-border); vertical-align: top; }
+.md tr:nth-child(even) td { background: var(--gh-canvas); }
 
-  /* Callouts */
-  .callout { border-radius: 8px; padding: 16px 18px; margin: 20px 0; border-left: 3px solid; }
-  .callout.info  { background: rgba(124,106,247,.08); border-color: var(--accent); }
-  .callout.warn  { background: rgba(247,167,108,.08); border-color: var(--accent3); }
-  .callout.tip   { background: rgba(86,207,178,.08); border-color: var(--accent2); }
-  .callout p { margin: 0; font-size: 14px; }
-  .callout strong { display: block; margin-bottom: 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+/* ── Syntax tokens ── */
+.kw  { color: #cf222e; }
+.fn  { color: #8250df; }
+.str { color: #0a3069; }
+.cm  { color: #6e7781; font-style: italic; }
+.tp  { color: #953800; }
+.num { color: #0550ae; }
 
-  /* Retry class badges */
-  .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; font-family: monospace; }
-  .badge.safe  { background: var(--safe);  color: var(--safe-text); }
-  .badge.unsafe{ background: var(--unsafe);color: var(--unsafe-text); }
-  .badge.cond  { background: var(--cond);  color: var(--cond-text); }
+/* ── Badges ── */
+.badge { display: inline-block; padding: 2px 8px; border-radius: 2em; font-size: 12px; font-weight: 500; font-family: monospace; }
+.badge.safe   { background: var(--gh-safe-bg);   color: var(--gh-safe-text);   border: 1px solid #4ac26b55; }
+.badge.unsafe { background: var(--gh-unsafe-bg); color: var(--gh-unsafe-text); border: 1px solid #ff818266; }
+.badge.cond   { background: var(--gh-cond-bg);   color: var(--gh-cond-text);   border: 1px solid #d4a72c66; }
 
-  /* Architecture diagram */
-  .diagram { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 20px; overflow-x: auto; font-family: monospace; font-size: 12px; line-height: 1.5; color: #8b90b0; white-space: pre; margin: 16px 0 24px; }
-  .diagram .box  { color: var(--accent2); }
-  .diagram .arrow{ color: var(--accent3); }
-  .diagram .label{ color: var(--text); }
+/* ── Callouts ── */
+.note { background: #ddf4ff; border: 1px solid #54aeff66; border-radius: 6px; padding: 12px 16px; margin: 12px 0; font-size: 14px; }
+.note strong { color: #0550ae; }
+.warn { background: #fff8c5; border: 1px solid #d4a72c66; border-radius: 6px; padding: 12px 16px; margin: 12px 0; font-size: 14px; }
+.warn strong { color: #7d4e00; }
+.tip  { background: #dafbe1; border: 1px solid #4ac26b55; border-radius: 6px; padding: 12px 16px; margin: 12px 0; font-size: 14px; }
+.tip strong  { color: #116329; }
 
-  /* Step list */
-  .steps { counter-reset: step; list-style: none; margin: 0 0 24px; padding: 0; }
-  .steps li { counter-increment: step; display: flex; gap: 16px; margin-bottom: 20px; }
-  .steps li::before { content: counter(step); min-width: 28px; height: 28px; background: var(--accent); color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; margin-top: 2px; }
-  .steps li .step-body { flex: 1; }
-  .steps li .step-title { font-weight: 600; color: var(--text); margin-bottom: 6px; }
+/* ── Diagram ── */
+.diagram { background: var(--gh-pre-bg); border: 1px solid var(--gh-border); border-radius: 6px; padding: 16px; overflow-x: auto; font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; line-height: 1.5; color: var(--gh-muted); white-space: pre; margin: 12px 0 16px; }
 
-  /* Verify checks */
-  .verify { display: flex; align-items: flex-start; gap: 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; }
-  .verify .icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
-  .verify .body { flex: 1; }
-  .verify .body strong { display: block; font-size: 14px; margin-bottom: 4px; }
-  .verify .body p { margin: 0; font-size: 13px; color: var(--muted); }
+/* ── Steps ── */
+.steps { counter-reset: step; list-style: none; margin: 0 0 16px; padding: 0; }
+.steps > li { counter-increment: step; display: flex; gap: 14px; margin-bottom: 16px; }
+.steps > li::before { content: counter(step); min-width: 24px; height: 24px; background: var(--gh-accent); color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; margin-top: 3px; }
+.step-title { font-weight: 600; margin-bottom: 6px; }
 
-  /* Troubleshoot */
-  .trouble { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 16px; overflow: hidden; }
-  .trouble summary { padding: 12px 16px; cursor: pointer; font-weight: 600; font-size: 14px; background: var(--surface2); list-style: none; display: flex; align-items: center; gap: 8px; }
-  .trouble summary::before { content: '▶'; font-size: 10px; color: var(--muted); transition: transform .2s; }
-  .trouble[open] summary::before { transform: rotate(90deg); }
-  .trouble .trouble-body { padding: 16px; }
+/* ── Verify ── */
+.verify { display: flex; gap: 10px; background: var(--gh-canvas); border: 1px solid var(--gh-border); border-radius: 6px; padding: 12px 14px; margin-bottom: 10px; }
+.verify .icon { font-size: 16px; flex-shrink: 0; }
+.verify strong { display: block; font-size: 14px; margin-bottom: 2px; }
+.verify p { margin: 0; font-size: 13px; color: var(--gh-muted); }
 
-  /* TOC */
-  .toc { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px 24px; margin-bottom: 36px; }
-  .toc h4 { margin: 0 0 12px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .1em; }
-  .toc ol { margin: 0; padding-left: 18px; }
-  .toc li { margin-bottom: 4px; font-size: 13px; }
+/* ── Trouble ── */
+details.trouble { border: 1px solid var(--gh-border); border-radius: 6px; margin-bottom: 8px; }
+details.trouble summary { padding: 10px 14px; cursor: pointer; font-weight: 500; font-size: 14px; background: var(--gh-canvas); list-style: none; display: flex; align-items: center; gap: 8px; border-radius: 6px; }
+details.trouble[open] summary { border-radius: 6px 6px 0 0; border-bottom: 1px solid var(--gh-border); }
+details.trouble summary::before { content: '▶'; font-size: 10px; color: var(--gh-muted); transition: transform .15s; }
+details.trouble[open] summary::before { transform: rotate(90deg); }
+details.trouble .tbody { padding: 14px 16px; }
 
-  /* Scrollbar */
-  ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { background: var(--bg); }
-  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+/* ── Page nav tabs (inside readme) ── */
+.page-tabs { display: flex; border-bottom: 1px solid var(--gh-border); margin-bottom: 24px; gap: 0; }
+.page-tab { padding: 8px 16px; font-size: 14px; color: var(--gh-muted); background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; font-weight: 500; transition: color .1s; margin-bottom: -1px; }
+.page-tab:hover { color: var(--gh-text); }
+.page-tab.active { color: var(--gh-text); border-bottom-color: #fd8c73; }
+.tab-page { display: none; }
+.tab-page.active { display: block; }
 
-  @media (max-width: 768px) {
-    nav { display: none; }
-    main { margin-left: 0; padding: 24px 20px; }
-  }
+/* ── TOC ── */
+.toc { background: var(--gh-canvas); border: 1px solid var(--gh-border); border-radius: 6px; padding: 14px 18px; margin-bottom: 20px; }
+.toc p { font-size: 12px; font-weight: 600; color: var(--gh-muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
+.toc ol { margin: 0; padding-left: 18px; }
+.toc li { font-size: 13px; margin-bottom: 3px; }
+
+/* ── Footer ── */
+footer { border-top: 1px solid var(--gh-border); padding: 24px 16px; text-align: center; font-size: 12px; color: var(--gh-muted); margin-top: 40px; }
+footer a { color: var(--gh-link); text-decoration: none; }
+
+@media (max-width: 768px) {
+  .sidebar { display: none; }
+  .readme-body { padding: 16px; }
+  .layout { padding: 12px; }
+}
 </style>
 </head>
 <body>
-<nav id="sidebar">
-  <div class="logo">
-    <h1>Session Survivability</h1>
-    <p>gRPC · WebSocket · Kubernetes</p>
+<!-- topbar -->
+<header class="gh-topbar">
+  <svg height="32" viewBox="0 0 16 16" width="32"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+  <div class="repo-path">
+    <a href="#">reddy73</a><span class="sep">/</span><span class="repo-name">gRpc-ws-session-controller</span>
   </div>
-  <div class="section-label">Learning Guide</div>
-  <a href="#" onclick="showTab('learn');scrollTo('bg');return false;" class="sub">1. Background</a>
-  <a href="#" onclick="showTab('learn');scrollTo('arch');return false;" class="sub">2. Architecture</a>
-  <a href="#" onclick="showTab('learn');scrollTo('concepts');return false;" class="sub">3. Core Concepts</a>
-  <a href="#" onclick="showTab('learn');scrollTo('go');return false;" class="sub">4. Go Implementation</a>
-  <a href="#" onclick="showTab('learn');scrollTo('java');return false;" class="sub">5. Java Implementation</a>
-  <a href="#" onclick="showTab('learn');scrollTo('java-threading');return false;" class="sub" style="padding-left:44px">↳ Threading Model</a>
-  <a href="#" onclick="showTab('learn');scrollTo('java-vs-go');return false;" class="sub" style="padding-left:44px">↳ Java vs Go</a>
-  <a href="#" onclick="showTab('learn');scrollTo('java-pom');return false;" class="sub" style="padding-left:44px">↳ pom.xml</a>
-  <a href="#" onclick="showTab('learn');scrollTo('java-extend');return false;" class="sub" style="padding-left:44px">↳ Extensions</a>
-  <a href="#" onclick="showTab('learn');scrollTo('k8s');return false;" class="sub">6. K8s Manifests</a>
-  <a href="#" onclick="showTab('learn');scrollTo('tests');return false;" class="sub">7. Test Infrastructure</a>
-  <a href="#" onclick="showTab('learn');scrollTo('design');return false;" class="sub">8. Design Decisions</a>
-  <a href="#" onclick="showTab('learn');scrollTo('ext');return false;" class="sub">9. Extension Points</a>
-  <a href="#" onclick="showTab('learn');scrollTo('refs');return false;" class="sub">10. Further Reading</a>
-  <div class="section-label">Runbook</div>
-  <a href="#" onclick="showTab('run');scrollTo('build');return false;" class="sub">Part 1 — Build</a>
-  <a href="#" onclick="showTab('run');scrollTo('clusters');return false;" class="sub">Part 2 — Clusters</a>
-  <a href="#" onclick="showTab('run');scrollTo('deploy');return false;" class="sub">Part 3 — Deploy</a>
-  <a href="#" onclick="showTab('run');scrollTo('verify');return false;" class="sub">Part 4 — Verify</a>
-  <a href="#" onclick="showTab('run');scrollTo('observe');return false;" class="sub">Part 5 — Observe</a>
-  <a href="#" onclick="showTab('run');scrollTo('cleanup');return false;" class="sub">Part 6 — Cleanup</a>
-  <a href="#" onclick="showTab('run');scrollTo('trouble');return false;" class="sub">Troubleshooting</a>
-</nav>
-<main>
-  <div class="tabs">
-    <button class="tab-btn active" onclick="showTab('learn')">Learning Guide</button>
-    <button class="tab-btn" onclick="showTab('run')">Build, Run &amp; Verify</button>
+  <div class="spacer"></div>
+  <button class="star-btn">⭐ Star</button>
+</header>
+
+<!-- repo header -->
+<div class="repo-header">
+  <div class="breadcrumb">
+    <a class="owner" href="#">reddy73</a>
+    <span class="slash">/</span>
+    <span class="name">gRpc-ws-session-controller</span>
+    <span class="visibility">Public</span>
   </div>
-
-<!-- ═══════════════════════════════════════════════════════ LEARN TAB -->
-<div id="tab-learn" class="tab-page active">
-
-<h1>gRPC / WebSocket Session Survivability</h1>
-<p class="subtitle">A session-layer controller for Kubernetes that keeps long-lived gRPC streams and WebSocket connections alive across pod terminations, rolling updates, and endpoint changes.</p>
-
-<div class="toc">
-  <h4>Contents</h4>
-  <ol>
-    <li><a href="#bg">Background — Why This Problem Exists</a></li>
-    <li><a href="#arch">Architecture Overview</a></li>
-    <li><a href="#concepts">Core Concepts</a></li>
-    <li><a href="#go">Go Implementation</a></li>
-    <li><a href="#java">Java Implementation</a></li>
-    <li><a href="#k8s">Kubernetes Manifests</a></li>
-    <li><a href="#tests">Test Infrastructure</a></li>
-    <li><a href="#design">Key Design Decisions</a></li>
-    <li><a href="#ext">Extension Points</a></li>
-    <li><a href="#refs">Further Reading</a></li>
-  </ol>
+  <p class="desc">Session-layer controller for Kubernetes — keeps gRPC streams and WebSocket connections alive across pod terminations, rolling updates, and endpoint changes.</p>
+  <div class="topics">
+    <a class="topic" href="#">kubernetes</a>
+    <a class="topic" href="#">grpc</a>
+    <a class="topic" href="#">websocket</a>
+    <a class="topic" href="#">golang</a>
+    <a class="topic" href="#">java</a>
+    <a class="topic" href="#">session-management</a>
+    <a class="topic" href="#">kind</a>
+    <a class="topic" href="#">controller</a>
+  </div>
+  <nav class="repo-tabs">
+    <button class="repo-tab active">
+      <svg height="16" viewBox="0 0 16 16" width="16" fill="currentColor"><path d="M2 2.5A2.5 2.5 0 014.5 0h8.75a.75.75 0 01.75.75v12.5a.75.75 0 01-.75.75h-2.5a.75.75 0 010-1.5h1.75v-2h-8a1 1 0 00-.714 1.7.75.75 0 01-1.072 1.05A2.495 2.495 0 012 11.5v-9zm10.5-1V9h-8c-.356 0-.694.074-1 .208V2.5a1 1 0 011-1h8z"/></svg>
+      Code
+    </button>
+    <button class="repo-tab">
+      <svg height="16" viewBox="0 0 16 16" width="16" fill="currentColor"><path d="M8 9.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/><path fill-rule="evenodd" d="M8 0a8 8 0 100 16A8 8 0 008 0zM1.5 8a6.5 6.5 0 1113 0 6.5 6.5 0 01-13 0z"/></svg>
+      Issues <span class="count">0</span>
+    </button>
+    <button class="repo-tab">
+      <svg height="16" viewBox="0 0 16 16" width="16" fill="currentColor"><path fill-rule="evenodd" d="M7.177 3.073L9.573.677A.25.25 0 0110 .854v4.792a.25.25 0 01-.427.177L7.177 3.427a.25.25 0 010-.354zM3.75 2.5a.75.75 0 100 1.5.75.75 0 000-1.5zm-2.25.75a2.25 2.25 0 113 2.122v5.256a2.251 2.251 0 11-1.5 0V5.372A2.25 2.25 0 011.5 3.25zM11 2.5h-1V4h1a1 1 0 011 1v5.628a2.251 2.251 0 101.5 0V5A2.5 2.5 0 0011 2.5zm1 10.25a.75.75 0 111.5 0 .75.75 0 01-1.5 0zM3.75 12a.75.75 0 100 1.5.75.75 0 000-1.5z"/></svg>
+      Pull requests <span class="count">0</span>
+    </button>
+    <a class="repo-tab" href="concepts.html">
+      <svg height="16" viewBox="0 0 16 16" width="16" fill="currentColor"><path d="M0 1.75A.75.75 0 01.75 1h4.253c1.227 0 2.317.59 3 1.501A3.744 3.744 0 0111.006 1h4.245a.75.75 0 01.75.75v10.5a.75.75 0 01-.75.75h-4.507a2.25 2.25 0 00-1.591.659l-.622.621a.75.75 0 01-1.06 0l-.622-.621A2.25 2.25 0 005.258 13H.75a.75.75 0 01-.75-.75zm7.251 10.324l.004-5.073-.002-2.253A2.25 2.25 0 005.003 2.5H1.5v9h3.757a3.75 3.75 0 011.994.574zM8.755 4.75l-.004 7.322a3.752 3.752 0 011.992-.572H14.5v-9h-3.495a2.25 2.25 0 00-2.25 2.25z"/></svg>
+      Concepts
+    </a>
+  </nav>
 </div>
 
-<hr>
-<h2 id="bg">1. Background</h2>
+<!-- layout -->
+<div class="layout">
 
-<h3>HTTP/1.1 vs gRPC Streams vs WebSockets</h3>
-<table>
-  <tr><th>Property</th><th>HTTP/1.1</th><th>gRPC Unary</th><th>gRPC Stream</th><th>WebSocket</th></tr>
-  <tr><td>Connection lifetime</td><td>Per-request</td><td>Per-request</td><td>Long-lived</td><td>Long-lived</td></tr>
-  <tr><td>State on server</td><td>None</td><td>None</td><td>Yes (stream context)</td><td>Yes (session)</td></tr>
-  <tr><td>Safe to retry blindly</td><td>Yes</td><td>Usually</td><td><strong>No</strong></td><td><strong>No</strong></td></tr>
-  <tr><td>Affected by pod restart</td><td>No</td><td>No</td><td><strong>Yes</strong></td><td><strong>Yes</strong></td></tr>
-</table>
+  <!-- sidebar -->
+  <aside class="sidebar">
+    <div class="widget">
+      <div class="widget-header">About</div>
+      <div class="widget-body">
+        <p>Session-layer survivability controller for Kubernetes. Graceful drain, endpoint rebinding, and retry classification for gRPC streams and WebSockets.</p>
+        <div class="stat-row">
+          <svg height="16" viewBox="0 0 16 16" width="16"><path d="M8 .25a.75.75 0 01.673.418l1.882 3.815 4.21.612a.75.75 0 01.416 1.279l-3.046 2.97.719 4.192a.75.75 0 01-1.088.791L8 12.347l-3.766 1.98a.75.75 0 01-1.088-.79l.72-4.194L.818 6.374a.75.75 0 01.416-1.28l4.21-.611L7.327.668A.75.75 0 018 .25z"/></svg>
+          <span>0 stars</span>
+        </div>
+        <div class="stat-row">
+          <svg height="16" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M5 3.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm0 2.122a2.25 2.25 0 10-1.5 0v.878A2.25 2.25 0 005.75 8.5h1.5v2.128a2.251 2.251 0 101.5 0V8.5h1.5a2.25 2.25 0 002.25-2.25v-.878a2.25 2.25 0 10-1.5 0v.878a.75.75 0 01-.75.75h-4.5A.75.75 0 015 6.25v-.878zm3.75 7.378a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm3-8.75a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>
+          <span>0 forks</span>
+        </div>
+        <div class="stat-row">
+          <svg height="16" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zM0 8a8 8 0 1116 0A8 8 0 010 8zm6.5-.25A.75.75 0 017.25 7h1a.75.75 0 01.75.75v2.75h.25a.75.75 0 010 1.5h-2a.75.75 0 010-1.5h.25v-2h-.25a.75.75 0 01-.75-.75zM8 6a1 1 0 100-2 1 1 0 000 2z"/></svg>
+          <a href="concepts.html">Conceptual Overview →</a>
+        </div>
+      </div>
+    </div>
 
-<p>When Kubernetes terminates a pod it sends <code>SIGTERM</code>, waits <code>terminationGracePeriodSeconds</code>, then sends <code>SIGKILL</code>. Any open TCP connections are closed. For HTTP/1.1 the client just retries. For a gRPC bidirectional stream mid-flight, the client gets an abrupt <code>RST_STREAM</code> or <code>GOAWAY</code> and has to decide: is it safe to reconnect and replay? Often it is not.</p>
+    <div class="widget">
+      <div class="widget-header">Languages</div>
+      <div class="widget-body">
+        <div class="stat-row"><span class="lang-dot" style="background:#00ADD8"></span> Go <span style="margin-left:auto;color:var(--gh-muted)">58.4%</span></div>
+        <div class="stat-row"><span class="lang-dot" style="background:#b07219"></span> Java <span style="margin-left:auto;color:var(--gh-muted)">28.1%</span></div>
+        <div class="stat-row"><span class="lang-dot" style="background:#e34c26"></span> HTML <span style="margin-left:auto;color:var(--gh-muted)">8.2%</span></div>
+        <div class="stat-row"><span class="lang-dot" style="background:#89e051"></span> Shell <span style="margin-left:auto;color:var(--gh-muted)">3.1%</span></div>
+        <div class="stat-row"><span class="lang-dot" style="background:#f1e05a"></span> YAML <span style="margin-left:auto;color:var(--gh-muted)">2.2%</span></div>
+      </div>
+    </div>
 
-<h3>The Session Layer Gap</h3>
-<p>The OSI model has a session layer (layer 5) that manages connection state. Kubernetes operates at layer 3/4 (IP routing, TCP load balancing). There is nothing in between that understands "this TCP connection is a gRPC stream that has sent 47 messages and is waiting for message 48."</p>
-<p>This project implements that missing session layer as a Kubernetes controller.</p>
+    <div class="widget">
+      <div class="widget-header">Files</div>
+      <div class="widget-body" style="padding:8px 12px;">
+        <ul class="file-tree">
+          <li class="dir"><svg height="14" viewBox="0 0 16 16" width="14"><path d="M1.75 1A1.75 1.75 0 000 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0016 13.25v-8.5A1.75 1.75 0 0014.25 3H7.5a.25.25 0 01-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75z"/></svg> go/</li>
+          <li class="dir"><svg height="14" viewBox="0 0 16 16" width="14"><path d="M1.75 1A1.75 1.75 0 000 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0016 13.25v-8.5A1.75 1.75 0 0014.25 3H7.5a.25.25 0 01-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75z"/></svg> java/</li>
+          <li class="dir"><svg height="14" viewBox="0 0 16 16" width="14"><path d="M1.75 1A1.75 1.75 0 000 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0016 13.25v-8.5A1.75 1.75 0 0014.25 3H7.5a.25.25 0 01-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75z"/></svg> k8s/</li>
+          <li class="dir"><svg height="14" viewBox="0 0 16 16" width="14"><path d="M1.75 1A1.75 1.75 0 000 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0016 13.25v-8.5A1.75 1.75 0 0014.25 3H7.5a.25.25 0 01-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75z"/></svg> docs/</li>
+          <li class="dir"><svg height="14" viewBox="0 0 16 16" width="14"><path d="M1.75 1A1.75 1.75 0 000 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0016 13.25v-8.5A1.75 1.75 0 0014.25 3H7.5a.25.25 0 01-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75z"/></svg> test/</li>
+          <li><svg height="14" viewBox="0 0 16 16" width="14"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0113.25 16h-9.5A1.75 1.75 0 012 14.25V1.75z"/></svg> kind-cluster-a.yaml</li>
+          <li><svg height="14" viewBox="0 0 16 16" width="14"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0113.25 16h-9.5A1.75 1.75 0 012 14.25V1.75z"/></svg> kind-cluster-b.yaml</li>
+        </ul>
+      </div>
+    </div>
+  </aside>
 
-<h3>What "Survivability" Means Here</h3>
-<ul>
-  <li><strong>Drain</strong> — before a pod dies, tell its clients to finish up and reconnect elsewhere</li>
-  <li><strong>Rebind</strong> — when a pod's IP changes (rollout), move pinned sessions to the new endpoint</li>
-  <li><strong>Retry classification</strong> — know which RPCs can be safely retried vs which need dedup tokens</li>
-  <li><strong>Heartbeat tracking</strong> — detect zombie sessions that lost their pod silently</li>
-</ul>
+  <!-- main content -->
+  <main class="content">
+    <!-- commit bar -->
+    <div class="commit-bar">
+      <div class="avatar">R</div>
+      <span class="msg">feat: gRPC/WebSocket session survivability controller for Kubernetes</span>
+      <span class="meta">reddy73 ·</span>
+      <span class="sha">7e45b16</span>
+      <span class="meta">· 29 files · 4,562 lines</span>
+    </div>
 
-<hr>
-<h2 id="arch">2. Architecture Overview</h2>
+    <!-- readme -->
+    <div class="readme-card">
+      <div class="readme-header">
+        <svg height="16" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M14.85 3H1.15C.52 3 0 3.52 0 4.15v7.69C0 12.48.52 13 1.15 13h13.69c.64 0 1.15-.52 1.15-1.15v-7.7C16 3.52 15.48 3 14.85 3zM9 11H7V8L5.5 9.92 4 8v3H2V5h2l1.5 2L7 5h2v6zm2.99.5L9.5 8H11V5h2v3h1.5l-2.51 3.5z"/></svg>
+        README.md
+      </div>
+      <div class="readme-body md">
 
-<div class="diagram">┌─────────────────────────────────────────────────────────────────┐
-│                        Kubernetes Cluster                        │
-│                                                                  │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │                  session-controller pod                   │   │
-│  │                                                           │   │
-│  │  ┌─────────────┐   ┌──────────────┐   ┌──────────────┐  │   │
-│  │  │   Session   │   │    Drain     │   │   Endpoint   │  │   │
-│  │  │   Tracker   │◄──│   Handler   │   │   Watcher    │  │   │
-│  │  │             │   │             │   │              │  │   │
-│  │  │ in-memory   │   │ SIGTERM →   │   │ k8s informer │  │   │
-│  │  │ session map │   │ notify →    │   │ diff old/new │  │   │
-│  │  │ RWMutex     │   │ poll drain  │   │ IPs → rebind │  │   │
-│  │  └─────────────┘   └──────────────┘   └──────────────┘  │   │
-│  │                                                           │   │
-│  │  ┌──────────────────────────────────────────────────┐    │   │
-│  │  │              Retry Classifier                     │    │   │
-│  │  │  method pattern → SAFE / UNSAFE / CONDITIONAL    │    │   │
-│  │  └──────────────────────────────────────────────────┘    │   │
-│  └──────────────────────────────────────────────────────────┘   │
-│                                                                  │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐       │
-│  │ echoserver-0 │    │ echoserver-1 │    │ echoserver-2 │       │
-│  │  pod :50051  │    │  pod :50051  │    │  pod :50051  │       │
-│  └──────────────┘    └──────────────┘    └──────────────┘       │
-│         ▲                   ▲                   ▲                │
-│         └───────────────────┴───────────────────┘               │
-│                    Endpoints object                              │
-│              (watched by EndpointWatcher)                        │
-└─────────────────────────────────────────────────────────────────┘</div>
+        <h1>gRPC / WebSocket Session Survivability for Kubernetes</h1>
+        <p>A session-layer controller that keeps long-lived gRPC streams and WebSocket connections alive across pod terminations, rolling updates, and endpoint changes — implemented in both <strong>Go</strong> and <strong>Java</strong>.</p>
 
-<h3>Data Flow: Pod Termination</h3>
-<div class="diagram">Kubernetes                Controller              Client
-    │                         │                      │
-    │── SIGTERM ──────────────►│                      │
-    │                         │── ByPod() ──────────►│ (find sessions)
-    │                         │◄─ [session list] ────│
-    │                         │── Notify() ─────────►│ (GOAWAY / WS close)
-    │                         │                      │── reconnect ──► new pod
-    │                         │── poll ─────────────►│ (wait for drain)
-    │── SIGKILL (after grace) ►│                      │
-    │                         │── force unregister ──│</div>
+        <div class="page-tabs">
+          <button class="page-tab active" onclick="showTab('overview')">Overview</button>
+          <button class="page-tab" onclick="showTab('go')">Go</button>
+          <button class="page-tab" onclick="showTab('java')">Java</button>
+          <button class="page-tab" onclick="showTab('runbook')">Runbook</button>
+        </div>
 
-<h3>Data Flow: Rolling Update</h3>
-<div class="diagram">Kubernetes                Controller              Client
-    │                         │                      │
-    │── update Endpoints ─────►│                      │
-    │   (old IP removed)       │── reconcile() ──────►│
-    │                         │   diff old vs new     │
-    │                         │── Rebind() ──────────►│ (move session to new IP)
-    │                         │── update session ─────│</div>
+        <!-- OVERVIEW TAB -->
+        <div id="tab-overview" class="tab-page active">
+          <div class="toc">
+            <p>Contents</p>
+            <ol>
+              <li><a href="#why">Why this exists</a></li>
+              <li><a href="#arch">Architecture</a></li>
+              <li><a href="#concepts">Core concepts</a></li>
+              <li><a href="#k8s">Kubernetes manifests</a></li>
+              <li><a href="#testing">Test infrastructure</a></li>
+              <li><a href="#design">Design decisions</a></li>
+              <li><a href="#ext">Extension points</a></li>
+            </ol>
+          </div>
 
-<hr>
-<h2 id="concepts">3. Core Concepts</h2>
+          <h2 id="why">Why this exists</h2>
+          <table>
+            <tr><th>Property</th><th>HTTP/1.1</th><th>gRPC Unary</th><th>gRPC Stream</th><th>WebSocket</th></tr>
+            <tr><td>Connection lifetime</td><td>Per-request</td><td>Per-request</td><td>Long-lived</td><td>Long-lived</td></tr>
+            <tr><td>State on server</td><td>None</td><td>None</td><td>Yes</td><td>Yes</td></tr>
+            <tr><td>Safe to retry blindly</td><td>Yes</td><td>Usually</td><td><strong>No</strong></td><td><strong>No</strong></td></tr>
+            <tr><td>Affected by pod restart</td><td>No</td><td>No</td><td><strong>Yes</strong></td><td><strong>Yes</strong></td></tr>
+          </table>
+          <p>Kubernetes operates at layer 3/4. It has no concept of "this TCP connection is a gRPC stream mid-message-47." When it kills a pod, it closes the socket. This project implements the missing session layer as a controller. See the <a href="concepts.html">Conceptual Overview</a> for a deep dive.</p>
 
-<h3>3.1 Session</h3>
-<p>A <code>Session</code> is the fundamental unit — one long-lived connection pinned to a specific pod.</p>
-<table>
-  <tr><th>Field</th><th>Purpose</th></tr>
-  <tr><td><code>ID</code></td><td>Unique identifier, generated by the client or a gateway</td></tr>
-  <tr><td><code>Type</code></td><td><code>grpc</code> or <code>websocket</code></td></tr>
-  <tr><td><code>PodName / Namespace</code></td><td>Which pod owns this session</td></tr>
-  <tr><td><code>Endpoint</code></td><td>Pod IP:port the session is connected to</td></tr>
-  <tr><td><code>LastSeen</code></td><td>Updated on each heartbeat; used to detect stale sessions</td></tr>
-  <tr><td><code>RetryClass</code></td><td>Whether this session's RPC is safe to retry</td></tr>
-</table>
+          <h2 id="arch">Architecture</h2>
+          <div class="diagram">┌──────────────────────────────────────────────────────────────┐
+│                      Kubernetes Cluster                       │
+│                                                              │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │               session-controller pod                 │    │
+│  │                                                      │    │
+│  │  ┌──────────────┐  ┌─────────────┐  ┌───────────┐  │    │
+│  │  │   Session    │  │    Drain    │  │ Endpoint  │  │    │
+│  │  │   Tracker   │◄─│   Handler  │  │  Watcher  │  │    │
+│  │  │  RWMutex    │  │ SIGTERM→   │  │ informer  │  │    │
+│  │  │  session map│  │ notify→    │  │ diff IPs  │  │    │
+│  │  │             │  │ poll drain │  │ → rebind  │  │    │
+│  │  └──────────────┘  └─────────────┘  └───────────┘  │    │
+│  │  ┌─────────────────────────────────────────────┐    │    │
+│  │  │  Retry Classifier                            │    │    │
+│  │  │  method pattern → SAFE / UNSAFE / CONDITIONAL│    │    │
+│  │  └─────────────────────────────────────────────┘    │    │
+│  └─────────────────────────────────────────────────────┘    │
+│                                                              │
+│  ┌────────────┐   ┌────────────┐   ┌────────────┐           │
+│  │echoserver-0│   │echoserver-1│   │echoserver-2│           │
+│  │  :50051    │   │  :50051    │   │  :50051    │           │
+│  └────────────┘   └────────────┘   └────────────┘           │
+│        ▲                ▲                ▲                   │
+│        └────────────────┴────────────────┘                   │
+│                   Endpoints object                           │
+└──────────────────────────────────────────────────────────────┘</div>
 
-<h3>3.2 RetryClass</h3>
-<p>The most important concept for correctness. Three classes:</p>
-<table>
-  <tr><th>Class</th><th>Meaning</th><th>Examples</th></tr>
-  <tr>
-    <td><span class="badge safe">SAFE</span></td>
-    <td>Idempotent reads. Client can reconnect and re-subscribe freely.</td>
-    <td>Watch, List, Get</td>
-  </tr>
-  <tr>
-    <td><span class="badge cond">CONDITIONAL</span></td>
-    <td>Mutations with side effects. Client must send a deduplication token so the server can detect and ignore replays.</td>
-    <td>Create, Update</td>
-  </tr>
-  <tr>
-    <td><span class="badge unsafe">UNSAFE</span></td>
-    <td>Stateful streaming writes. Client MUST NOT retry without application-level coordination. Replaying messages could cause duplicates, corruption, or out-of-order processing.</td>
-    <td>StreamEcho, StreamIngest</td>
-  </tr>
-</table>
-<div class="callout warn"><p><strong>Why this matters</strong>A naive retry-on-reconnect for an UNSAFE stream could send the same financial transaction twice, corrupt a log stream, or break a stateful protocol.</p></div>
+          <h3>Pod termination flow</h3>
+          <div class="diagram">Kubernetes          Controller           Client
+    │                    │                    │
+    │── SIGTERM ─────────►│                    │
+    │                    │── ByPod() ─────────►│ find sessions
+    │                    │── Notify() ────────►│ GOAWAY / WS close
+    │                    │                    │── reconnect ──► new pod
+    │                    │── poll 500ms ───────│ wait for drain
+    │── SIGKILL ──────────►│                    │
+    │                    │── force unregister ─│</div>
 
-<h3>3.3 Drain vs Force-Close</h3>
-<div class="diagram">terminationGracePeriodSeconds (k8s setting)
+          <h3>Rolling update flow</h3>
+          <div class="diagram">Kubernetes          Controller           Client
+    │                    │                    │
+    │── Endpoints MODIFIED►│                    │
+    │   (old IP removed)  │── reconcile() ─────│ diff old vs new
+    │                    │── Rebind() ────────►│ move to new IP
+    │                    │── update session ───│</div>
+
+          <h2 id="concepts">Core concepts</h2>
+
+          <h3>Session</h3>
+          <p>The fundamental unit — one long-lived connection pinned to a specific pod.</p>
+          <table>
+            <tr><th>Field</th><th>Purpose</th></tr>
+            <tr><td><code>ID</code></td><td>Unique identifier from client or gateway</td></tr>
+            <tr><td><code>Type</code></td><td><code>grpc</code> or <code>websocket</code></td></tr>
+            <tr><td><code>PodName / Namespace</code></td><td>Which pod owns this session</td></tr>
+            <tr><td><code>Endpoint</code></td><td>Pod IP:port</td></tr>
+            <tr><td><code>LastSeen</code></td><td>Updated on heartbeat; detects stale sessions</td></tr>
+            <tr><td><code>RetryClass</code></td><td>Whether this RPC is safe to retry</td></tr>
+          </table>
+
+          <h3>RetryClass</h3>
+          <table>
+            <tr><th>Class</th><th>Meaning</th><th>Examples</th></tr>
+            <tr><td><span class="badge safe">SAFE</span></td><td>Idempotent reads. Reconnect freely.</td><td>Watch, List, Get</td></tr>
+            <tr><td><span class="badge cond">CONDITIONAL</span></td><td>Mutations — send a dedup token on retry.</td><td>Create, Update</td></tr>
+            <tr><td><span class="badge unsafe">UNSAFE</span></td><td>Stateful streams. Do not retry without coordination.</td><td>StreamEcho, StreamIngest</td></tr>
+          </table>
+          <div class="warn"><strong>⚠ Default is UNSAFE</strong> — unclassified methods are assumed stateful. Fail safe, not fail open. A naive retry on an UNSAFE stream could send the same transaction twice.</div>
+
+          <h3>Drain vs Force-Close</h3>
+          <div class="diagram">terminationGracePeriodSeconds
 │
-├── SIGTERM received
-│   └── DrainHandler.Handle() called
-│       ├── Notify all sessions (GOAWAY / WS close frame)
-│       ├── Poll every 500ms for sessions to self-close
-│       └── If deadline passes → force unregister remaining sessions
+├── SIGTERM → DrainHandler.Handle()
+│   ├── Notify all sessions (GOAWAY / WS close frame)
+│   ├── Poll every 500ms for sessions to self-close
+│   └── Deadline exceeded → force unregister stragglers
 │
-└── SIGKILL (after grace period)
-    └── OS closes all TCP connections</div>
+└── SIGKILL → OS closes all TCP connections</div>
 
-<h3>3.4 Endpoint Rebinding</h3>
-<p>During a rolling update, Kubernetes replaces pods one at a time. The <code>Endpoints</code> object is updated as each old pod is removed and each new pod becomes ready. The <code>EndpointWatcher</code> diffs old vs new subsets. When a pod IP disappears, it finds all sessions pinned to that IP and calls <code>Rebind()</code> to move them to a surviving IP. This is "sticky stream" behavior — the session follows the logical connection, not the physical pod IP.</p>
+          <h3>Endpoint Rebinding</h3>
+          <p>During a rolling update the <code>Endpoints</code> object changes as old pods are removed and new pods become ready. The <code>EndpointWatcher</code> diffs old vs new subsets. When a pod IP disappears it finds all sessions pinned to that IP and calls <code>Rebind()</code> — the session follows the logical connection, not the physical pod IP.</p>
 
-<h3>3.5 Heartbeat and Stale Detection</h3>
-<p>Sessions call <code>Heartbeat(id)</code> periodically (e.g., every 30s). The tracker records <code>LastSeen</code>. <code>Stale(ttl)</code> returns sessions that haven't heartbeated within the TTL — these are likely orphaned (pod died without a clean drain event) and should be cleaned up.</p>
+          <h2 id="k8s">Kubernetes manifests</h2>
+          <table>
+            <tr><th>Setting</th><th>Value</th><th>Why</th></tr>
+            <tr><td><code>terminationGracePeriodSeconds</code></td><td>30</td><td>Window for drain before SIGKILL. Match to longest expected stream.</td></tr>
+            <tr><td><code>maxUnavailable</code></td><td>1</td><td>At least replicas-1 pods always serving.</td></tr>
+            <tr><td><code>readinessProbe.grpc.port</code></td><td>50051</td><td>Pod only added to Endpoints when health check passes.</td></tr>
+            <tr><td><code>imagePullPolicy: Never</code></td><td>—</td><td>Required for kind. Remove for real clusters.</td></tr>
+          </table>
+          <p>RBAC grants the controller <code>get/list/watch</code> on <code>endpoints</code> and <code>pods</code> only — no write access.</p>
 
-<hr>
-<h2 id="go">4. Go Implementation</h2>
+          <h2 id="testing">Test infrastructure</h2>
+          <p>Run <code>./test/run-tests.sh</code> to execute all three scenarios end-to-end:</p>
+          <table>
+            <tr><th>Test</th><th>Mechanism</th><th>Checks</th></tr>
+            <tr><td>Retry classifier</td><td>Read controller startup logs</td><td><code>Watch=safe</code>, <code>StreamEvents=unsafe</code></td></tr>
+            <tr><td>Graceful drain</td><td><code>kubectl delete pod --grace-period=10</code></td><td>Pod terminates, deployment self-heals</td></tr>
+            <tr><td>Rolling update</td><td><code>kubectl set env</code> triggers recreation</td><td>Rollout completes, endpoint watcher active</td></tr>
+          </table>
 
-<h3>Project Layout</h3>
-<pre><code>go/
-├── cmd/
-│   ├── controller/
-│   │   └── main.go          <span class="cm"># entry point, wires all components</span>
-│   └── echoserver/
-│       ├── main.go          <span class="cm"># test gRPC server (unary + bidi streaming)</span>
-│       └── proto/
-│           ├── echo.proto   <span class="cm"># service definition</span>
-│           └── echo.pb.go   <span class="cm"># hand-written stubs (no protoc needed)</span>
-├── internal/
-│   ├── session/tracker.go   <span class="cm"># thread-safe session registry</span>
-│   ├── drain/handler.go     <span class="cm"># graceful drain orchestration</span>
-│   ├── retry/classifier.go  <span class="cm"># RPC retry safety classification</span>
-│   └── endpoint/watcher.go  <span class="cm"># k8s Endpoints informer + rebinding</span>
-├── pkg/api/types.go         <span class="cm"># shared types: Session, DrainEvent, etc.</span>
-└── go.mod</code><span class="lang-tag">tree</span></pre>
+          <h2 id="design">Design decisions</h2>
+          <h3>Why interfaces for DrainNotifier and SessionRebinder?</h3>
+          <p>The controller is transport-agnostic. You might use <code>grpc.ClientConn.Close()</code>, a WebSocket <code>1001 Going Away</code> frame, or a message queue. Swap the <code>noopNotifier</code> in <code>main.go</code> with your real implementation.</p>
+          <h3>Why poll instead of event-driven drain?</h3>
+          <p>Sessions might crash without calling <code>Unregister</code>. The deadline must be enforced regardless of session behavior. Polling at 500ms is simple, predictable, and doesn't require sessions to signal back.</p>
+          <h3>Why kind over Docker Desktop's built-in Kubernetes?</h3>
+          <p>Docker Desktop ships with a single-node cluster. kind gives multi-node clusters (real cross-node scheduling), multiple independent clusters, reproducible YAML configs, and easy teardown.</p>
 
-<h3>4.1 pkg/api/types.go — Shared Types</h3>
-<pre><code><span class="kw">type</span> <span class="tp">Session</span> <span class="kw">struct</span> {
-    ID         <span class="tp">string</span>
-    Type       <span class="tp">SessionType</span>   <span class="cm">// "grpc" | "websocket"</span>
-    PodName    <span class="tp">string</span>
-    Namespace  <span class="tp">string</span>
-    Endpoint   <span class="tp">string</span>
-    StartedAt  time.<span class="tp">Time</span>
-    LastSeen   time.<span class="tp">Time</span>
-    RetryClass <span class="tp">RetryClass</span>    <span class="cm">// "safe" | "unsafe" | "conditional"</span>
-    Metadata   <span class="kw">map</span>[<span class="tp">string</span>]<span class="tp">string</span>
-}</code><span class="lang-tag">go</span></pre>
-<p>Simple structs — no interfaces, no embedding. Easy to serialize, easy to test. <code>DrainEvent</code> carries the pod name and termination deadline. <code>EndpointChange</code> carries old and new IP addresses for a rebind operation.</p>
+          <h2 id="ext">Extension points</h2>
+          <ul>
+            <li>Replace <code>noopNotifier</code> with real gRPC <code>GOAWAY</code> or WebSocket close frame</li>
+            <li>Add a heartbeat loop + <code>Stale(ttl)</code> cleanup goroutine</li>
+            <li>Migrate <code>EndpointWatcher</code> to <code>EndpointSlice</code> (k8s 1.21+)</li>
+            <li>Watch <code>pod.DeletionTimestamp</code> for drain lead time instead of a timer</li>
+            <li>Persist sessions as a CRD for controller-restart survivability</li>
+          </ul>
+          <div class="note"><strong>📖 Deeper reading</strong> — See <a href="concepts.html">concepts.html</a> for the full conceptual overview: OSI session layer theory, the Two Generals problem, idempotency keys, and how this maps to real distributed systems.</div>
+        </div>
 
-<h3>4.2 internal/session/tracker.go — Session Registry</h3>
-<pre><code><span class="kw">type</span> <span class="tp">Tracker</span> <span class="kw">struct</span> {
+        <!-- GO TAB -->
+        <div id="tab-go" class="tab-page">
+          <h2>Go Implementation</h2>
+          <pre><code>go/
+├── cmd/controller/main.go          <span class="cm"># entry point, wires all components</span>
+├── cmd/echoserver/main.go          <span class="cm"># test gRPC server (unary + bidi stream)</span>
+├── internal/session/tracker.go    <span class="cm"># sync.RWMutex session registry</span>
+├── internal/drain/handler.go      <span class="cm"># graceful drain orchestration</span>
+├── internal/retry/classifier.go   <span class="cm"># RPC retry safety classification</span>
+├── internal/endpoint/watcher.go   <span class="cm"># k8s Endpoints informer + rebinding</span>
+└── pkg/api/types.go               <span class="cm"># shared types: Session, DrainEvent, etc.</span></code><span class="lang-tag">tree</span></pre>
+
+          <h3>Session Tracker — sync.RWMutex</h3>
+          <pre><code><span class="kw">type</span> <span class="tp">Tracker</span> <span class="kw">struct</span> {
     mu       sync.<span class="tp">RWMutex</span>
     sessions <span class="kw">map</span>[<span class="tp">string</span>]*api.<span class="tp">Session</span>
 }
+<span class="cm">// Register/Unregister/Heartbeat → write lock
+// ByPod/Stale → read lock (concurrent reads proceed in parallel)</span></code><span class="lang-tag">go</span></pre>
+          <p><code>sync.RWMutex</code> over <code>sync.Map</code> because range iteration (<code>ByPod</code>, <code>Stale</code>) is awkward with <code>sync.Map</code> and reads vastly outnumber writes at runtime.</p>
 
-<span class="cm">// ByPod — find all sessions on a specific pod (called during drain)</span>
-<span class="kw">func</span> (t *<span class="tp">Tracker</span>) <span class="fn">ByPod</span>(podName, namespace <span class="tp">string</span>) []*api.<span class="tp">Session</span> {
-    t.mu.<span class="fn">RLock</span>()
-    <span class="kw">defer</span> t.mu.<span class="fn">RUnlock</span>()
-    <span class="cm">// linear scan — acceptable for O(hundreds) of sessions per pod</span>
-}</code><span class="lang-tag">go</span></pre>
-<p>Uses <code>sync.RWMutex</code>: write lock for <code>Register/Unregister/Heartbeat</code>, read lock for <code>ByPod/Stale</code> — multiple readers proceed in parallel. A plain map with <code>RWMutex</code> is preferred over <code>sync.Map</code> here because range iteration (<code>ByPod</code>, <code>Stale</code>) is awkward with <code>sync.Map</code>.</p>
-
-<h3>4.3 internal/drain/handler.go — Graceful Drain</h3>
-<pre><code><span class="kw">func</span> (h *<span class="tp">Handler</span>) <span class="fn">Handle</span>(ctx context.<span class="tp">Context</span>, event api.<span class="tp">DrainEvent</span>) {
-    sessions := h.tracker.<span class="fn">ByPod</span>(event.PodName, event.Namespace)
-    deadline := time.<span class="fn">Now</span>().<span class="fn">Add</span>(event.Deadline)
-
-    <span class="cm">// 1. Notify all sessions immediately</span>
-    <span class="kw">for</span> _, s := <span class="kw">range</span> sessions {
-        h.notifier.<span class="fn">Notify</span>(s, time.<span class="fn">Until</span>(deadline))
-    }
-
-    <span class="cm">// 2. Poll until drained or deadline</span>
-    ticker := time.<span class="fn">NewTicker</span>(<span class="num">500</span> * time.Millisecond)
-    <span class="kw">for</span> {
-        <span class="kw">select</span> {
-        <span class="kw">case</span> &lt;-ctx.<span class="fn">Done</span>(): <span class="kw">return</span>
-        <span class="kw">case</span> &lt;-ticker.C:
-            remaining := h.tracker.<span class="fn">ByPod</span>(...)
-            <span class="kw">if</span> <span class="fn">len</span>(remaining) == <span class="num">0</span> { <span class="kw">return</span> }
-            <span class="kw">if</span> time.<span class="fn">Now</span>().<span class="fn">After</span>(deadline) {
-                <span class="kw">for</span> _, s := <span class="kw">range</span> remaining { h.tracker.<span class="fn">Unregister</span>(s.ID) }
-                <span class="kw">return</span>
-            }
+          <h3>Drain Handler — ticker + select</h3>
+          <pre><code>ticker := time.<span class="fn">NewTicker</span>(<span class="num">500</span> * time.Millisecond)
+<span class="kw">for</span> {
+    <span class="kw">select</span> {
+    <span class="kw">case</span> &lt;-ctx.<span class="fn">Done</span>(): <span class="kw">return</span>          <span class="cm">// controller shutting down</span>
+    <span class="kw">case</span> &lt;-ticker.C:
+        remaining := h.tracker.<span class="fn">ByPod</span>(...)
+        <span class="kw">if</span> <span class="fn">len</span>(remaining) == <span class="num">0</span> { <span class="kw">return</span> } <span class="cm">// clean drain</span>
+        <span class="kw">if</span> time.<span class="fn">Now</span>().<span class="fn">After</span>(deadline) {
+            <span class="cm">// force close stragglers</span>
         }
     }
 }</code><span class="lang-tag">go</span></pre>
-<p>The <code>DrainNotifier</code> interface is the integration point. For gRPC: call <code>conn.Close()</code> or send a <code>GOAWAY</code> frame. For WebSocket: send a <code>1001 Going Away</code> close frame. The <code>noopNotifier</code> in <code>main.go</code> just logs — replace it with your real transport logic.</p>
 
-<h3>4.4 internal/retry/classifier.go — Retry Safety</h3>
-<pre><code><span class="kw">func</span> (c *<span class="tp">Classifier</span>) <span class="fn">Classify</span>(method <span class="tp">string</span>) api.<span class="tp">RetryClass</span> {
-    <span class="kw">for</span> _, r := <span class="kw">range</span> c.rules {
-        <span class="kw">if</span> <span class="fn">matchPattern</span>(r.MethodPattern, method) {
-            <span class="kw">return</span> r.Class
-        }
-    }
-    <span class="kw">return</span> api.RetryClassUnsafe  <span class="cm">// conservative default</span>
-}
-
-<span class="cm">// Default rules</span>
+          <h3>Retry Classifier — pattern matching</h3>
+          <pre><code><span class="cm">// Default rules</span>
 {MethodPattern: <span class="str">"*/Watch"</span>,   Class: api.RetryClassSafe},
 {MethodPattern: <span class="str">"*/List"</span>,    Class: api.RetryClassSafe},
 {MethodPattern: <span class="str">"*/Create"</span>,  Class: api.RetryClassConditional},
-{MethodPattern: <span class="str">"*/Stream*"</span>, Class: api.RetryClassUnsafe},</code><span class="lang-tag">go</span></pre>
-<p>Pattern matching: <code>*/Watch</code> matches any service's Watch method. <code>*/Stream*</code> matches any method starting with Stream. The default is <code>UNSAFE</code> — fail safe, not fail open.</p>
+{MethodPattern: <span class="str">"*/Stream*"</span>, Class: api.RetryClassUnsafe},
+<span class="cm">// fallback → RetryClassUnsafe (conservative default)</span></code><span class="lang-tag">go</span></pre>
 
-<h3>4.5 internal/endpoint/watcher.go — Endpoint Rebinding</h3>
-<pre><code>factory := informers.<span class="fn">NewSharedInformerFactoryWithOptions</span>(client, <span class="num">0</span>,
+          <h3>Endpoint Watcher — shared informer</h3>
+          <pre><code>factory := informers.<span class="fn">NewSharedInformerFactoryWithOptions</span>(client, <span class="num">0</span>,
     informers.<span class="fn">WithNamespace</span>(namespace))
 informer := factory.<span class="fn">Core</span>().<span class="fn">V1</span>().<span class="fn">Endpoints</span>().<span class="fn">Informer</span>()
-
 informer.<span class="fn">AddEventHandler</span>(cache.<span class="tp">ResourceEventHandlerFuncs</span>{
     UpdateFunc: <span class="kw">func</span>(old, new <span class="kw">interface</span>{}) {
         w.<span class="fn">reconcile</span>(old.(*corev1.<span class="tp">Endpoints</span>), new.(*corev1.<span class="tp">Endpoints</span>))
     },
 })</code><span class="lang-tag">go</span></pre>
-<p>A shared informer maintains a local cache of Kubernetes objects and delivers events via a work queue. It handles reconnection, list+watch semantics, and cache sync automatically — you don't poll the API server.</p>
-<div class="callout info"><p><strong>EndpointSlice migration</strong>Kubernetes 1.33+ deprecates <code>v1 Endpoints</code>. Migrate by switching to <code>factory.Discovery().V1().EndpointSlices().Informer()</code>.</p></div>
+          <div class="note"><strong>Note</strong> — Kubernetes 1.33+ deprecates <code>v1 Endpoints</code>. Migrate to <code>factory.Discovery().V1().EndpointSlices().Informer()</code>.</div>
 
-<h3>4.6 cmd/echoserver/main.go — Test gRPC Server</h3>
-<pre><code><span class="cm">// Unary — safe to retry (stateless)</span>
-<span class="kw">func</span> (s *<span class="tp">echoServer</span>) <span class="fn">Echo</span>(ctx context.<span class="tp">Context</span>, req *pb.<span class="tp">EchoRequest</span>) (*pb.<span class="tp">EchoResponse</span>, <span class="tp">error</span>)
-
-<span class="cm">// Bidirectional streaming — unsafe to retry (stateful)</span>
-<span class="kw">func</span> (s *<span class="tp">echoServer</span>) <span class="fn">StreamEcho</span>(stream pb.<span class="tp">EchoService_StreamEchoServer</span>) <span class="tp">error</span>
-
-<span class="cm">// On SIGTERM — gRPC-native drain</span>
-srv.<span class="fn">GracefulStop</span>()  <span class="cm">// stops accepting, waits for active RPCs, closes listener</span></code><span class="lang-tag">go</span></pre>
-
-<h3>4.7 cmd/controller/main.go — Wiring</h3>
-<pre><code><span class="cm">// Signal-aware context — cancelled on SIGTERM/SIGINT</span>
-ctx, cancel := signal.<span class="fn">NotifyContext</span>(context.<span class="fn">Background</span>(), os.Interrupt, syscall.SIGTERM)
-
-<span class="cm">// In-cluster config — reads ServiceAccount token from</span>
-<span class="cm">// /var/run/secrets/kubernetes.io/serviceaccount/</span>
-cfg, err := rest.<span class="fn">InClusterConfig</span>()
-
-tracker      := session.<span class="fn">NewTracker</span>()
-classifier   := retry.<span class="fn">NewClassifier</span>(retry.<span class="fn">DefaultRules</span>())
-drainHandler := drain.<span class="fn">NewHandler</span>(tracker, &amp;noopNotifier{})
-epWatcher    := endpoint.<span class="fn">NewWatcher</span>(tracker, &amp;noopRebinder{})
-
+          <h3>Controller wiring — signal.NotifyContext</h3>
+          <pre><code>ctx, cancel := signal.<span class="fn">NotifyContext</span>(context.<span class="fn">Background</span>(),
+    os.Interrupt, syscall.SIGTERM)
+<span class="cm">// ctx cancelled on SIGTERM → propagates to all components</span>
+cfg, _ := rest.<span class="fn">InClusterConfig</span>() <span class="cm">// reads mounted ServiceAccount token</span>
 <span class="kw">go</span> epWatcher.<span class="fn">Run</span>(ctx, client, namespace)
-&lt;-ctx.<span class="fn">Done</span>()  <span class="cm">// block until SIGTERM</span></code><span class="lang-tag">go</span></pre>
+&lt;-ctx.<span class="fn">Done</span>()</code><span class="lang-tag">go</span></pre>
+        </div>
 
-<hr>
-<h2 id="java">5. Java Implementation</h2>
-
-<h3>Project Layout</h3>
-<pre><code>java/src/main/java/io/session/
-├── Session.java           <span class="cm">// domain model (enums + getters/setters)</span>
-├── SessionRegistry.java   <span class="cm">// ConcurrentHashMap-based registry</span>
+        <!-- JAVA TAB -->
+        <div id="tab-java" class="tab-page">
+          <h2>Java Implementation</h2>
+          <pre><code>java/src/main/java/io/session/
+├── Session.java           <span class="cm">// domain model — enums + getters/setters</span>
+├── SessionRegistry.java   <span class="cm">// ConcurrentHashMap registry</span>
 ├── DrainHandler.java      <span class="cm">// ScheduledExecutorService drain loop</span>
-├── RetryClassifier.java   <span class="cm">// pattern-based RPC classification</span>
+├── RetryClassifier.java   <span class="cm">// record-based rule matching</span>
 ├── EndpointWatcher.java   <span class="cm">// fabric8 Kubernetes client watcher</span>
 └── SessionController.java <span class="cm">// main entry point</span></code><span class="lang-tag">tree</span></pre>
+          <p>Dependencies: <code>io.fabric8:kubernetes-client:6.10.0</code>, <code>io.grpc:grpc-netty-shaded:1.62.2</code>, Java 21.</p>
 
-<h3>5.1 Session.java — Domain Model</h3>
-<pre><code><span class="kw">public class</span> <span class="tp">Session</span> {
-    <span class="kw">public enum</span> <span class="tp">Type</span> { GRPC, WEBSOCKET }
+          <h3>SessionRegistry — ConcurrentHashMap</h3>
+          <pre><code><span class="kw">private final</span> Map&lt;<span class="tp">String</span>, <span class="tp">Session</span>&gt; sessions = <span class="kw">new</span> <span class="tp">ConcurrentHashMap</span>&lt;&gt;();</code><span class="lang-tag">java</span></pre>
+          <p>Segment-level locking — concurrent reads never block each other. Compare to Go's explicit <code>sync.RWMutex</code>: Java is simpler to write correctly; Go gives finer control (hold lock across multiple operations atomically).</p>
 
-    <span class="kw">public enum</span> <span class="tp">RetryClass</span> {
-        SAFE,         <span class="cm">// idempotent, no side effects</span>
-        UNSAFE,       <span class="cm">// stateful, must rebind</span>
-        CONDITIONAL   <span class="cm">// retry with dedup token</span>
-    }
-}</code><span class="lang-tag">java</span></pre>
-<p>Enums mirror the Go constants exactly — important if the two implementations ever interoperate via a shared API or message bus.</p>
-
-<h3>5.2 SessionRegistry.java — Thread-Safe Registry</h3>
-<pre><code><span class="kw">private final</span> Map&lt;<span class="tp">String</span>, <span class="tp">Session</span>&gt; sessions = <span class="kw">new</span> <span class="tp">ConcurrentHashMap</span>&lt;&gt;();</code><span class="lang-tag">java</span></pre>
-<p><code>ConcurrentHashMap</code> uses segment-level locking — concurrent reads never block each other, concurrent writes to different keys don't block each other. Compare to Go's explicit <code>sync.RWMutex</code>: Go gives finer control (hold the lock across multiple operations atomically); Java is simpler to write correctly.</p>
-<div class="callout tip"><p><strong>Weakly consistent iteration</strong><code>ConcurrentHashMap.values()</code> may or may not reflect concurrent modifications during iteration. Acceptable here — a session registered during a drain scan is caught on the next poll cycle.</p></div>
-
-<h3>5.3 DrainHandler.java — ScheduledExecutorService</h3>
-<pre><code>scheduler.<span class="fn">scheduleAtFixedRate</span>(() -&gt; {
+          <h3>DrainHandler — ScheduledExecutorService</h3>
+          <pre><code>scheduler.<span class="fn">scheduleAtFixedRate</span>(() -&gt; {
     List&lt;<span class="tp">Session</span>&gt; remaining = registry.<span class="fn">byPod</span>(podName, namespace);
-    <span class="kw">if</span> (remaining.<span class="fn">isEmpty</span>()) {
-        scheduler.<span class="fn">shutdown</span>();   <span class="cm">// clean drain</span>
-        <span class="kw">return</span>;
-    }
+    <span class="kw">if</span> (remaining.<span class="fn">isEmpty</span>()) { scheduler.<span class="fn">shutdown</span>(); <span class="kw">return</span>; }
     <span class="kw">if</span> (Instant.<span class="fn">now</span>().<span class="fn">isAfter</span>(deadline)) {
         remaining.<span class="fn">forEach</span>(s -&gt; registry.<span class="fn">unregister</span>(s.<span class="fn">getId</span>()));
-        scheduler.<span class="fn">shutdown</span>();   <span class="cm">// force close</span>
+        scheduler.<span class="fn">shutdown</span>();
     }
 }, <span class="num">500</span>, <span class="num">500</span>, TimeUnit.MILLISECONDS);</code><span class="lang-tag">java</span></pre>
-<p><code>DrainNotifier</code> is a functional interface — pass a lambda. Go uses a ticker inside a <code>select</code> loop tied to <code>ctx.Done()</code>; Java uses <code>ScheduledExecutorService</code> which is more idiomatic but lacks built-in context cancellation.</p>
 
-<h3>5.4 RetryClassifier.java — Java Records</h3>
-<pre><code><span class="kw">public record</span> <span class="tp">Rule</span>(<span class="tp">String</span> methodPattern, Session.<span class="tp">RetryClass</span> retryClass) {}
+          <h3>RetryClassifier — Java records</h3>
+          <pre><code><span class="kw">public record</span> <span class="tp">Rule</span>(<span class="tp">String</span> methodPattern, Session.<span class="tp">RetryClass</span> retryClass) {}
 
 <span class="kw">public static</span> List&lt;<span class="tp">Rule</span>&gt; <span class="fn">defaultRules</span>() {
     <span class="kw">return</span> List.<span class="fn">of</span>(
@@ -521,751 +568,89 @@ epWatcher    := endpoint.<span class="fn">NewWatcher</span>(tracker, &amp;noopRe
         <span class="kw">new</span> <span class="tp">Rule</span>(<span class="str">"*/Create"</span>,  Session.RetryClass.CONDITIONAL)
     );
 }</code><span class="lang-tag">java</span></pre>
-<p><code>record</code> (Java 16+) is a concise immutable data carrier — auto-generates constructor, <code>equals</code>, <code>hashCode</code>, <code>toString</code>, and accessors. Equivalent to a Go struct with no methods. <code>List.of()</code> returns an immutable list — correct for a static rule set.</p>
 
-<h3>5.5 EndpointWatcher.java — fabric8 Client</h3>
-<pre><code>client.<span class="fn">endpoints</span>().<span class="fn">inNamespace</span>(namespace).<span class="fn">watch</span>(<span class="kw">new</span> <span class="tp">Watcher</span>&lt;&gt;() {
-    <span class="kw">@Override</span>
-    <span class="kw">public void</span> <span class="fn">eventReceived</span>(<span class="tp">Action</span> action, <span class="tp">Endpoints</span> endpoints) {
-        <span class="kw">if</span> (action == Action.MODIFIED) reconcile(endpoints, namespace);
+          <h3>EndpointWatcher — fabric8</h3>
+          <pre><code>client.<span class="fn">endpoints</span>().<span class="fn">inNamespace</span>(namespace).<span class="fn">watch</span>(<span class="kw">new</span> <span class="tp">Watcher</span>&lt;&gt;() {
+    <span class="kw">@Override public void</span> <span class="fn">eventReceived</span>(<span class="tp">Action</span> action, <span class="tp">Endpoints</span> ep) {
+        <span class="kw">if</span> (action == Action.MODIFIED) <span class="fn">reconcile</span>(ep, namespace);
     }
-    <span class="kw">@Override</span>
-    <span class="kw">public void</span> <span class="fn">onClose</span>(<span class="tp">WatcherException</span> e) {
+    <span class="kw">@Override public void</span> <span class="fn">onClose</span>(<span class="tp">WatcherException</span> e) {
         <span class="cm">// fabric8 auto-reconnects on transient errors</span>
     }
 });</code><span class="lang-tag">java</span></pre>
-<p>fabric8's <code>Watcher</code> is the Java equivalent of <code>client-go</code>'s informer event handler. fabric8 handles reconnection automatically when the watch stream drops.</p>
+        </div>
 
-<h3>5.6 SessionController.java — Entry Point</h3>
-<p><code>SessionController</code> is the main class. It wires all components together and starts the controller loop.</p>
-<pre><code><span class="kw">public static void</span> <span class="fn">main</span>(<span class="tp">String</span>[] args) {
-    <span class="tp">String</span> namespace = System.<span class="fn">getenv</span>().<span class="fn">getOrDefault</span>(<span class="str">"NAMESPACE"</span>, <span class="str">"default"</span>);
+        <!-- RUNBOOK TAB -->
+        <div id="tab-runbook" class="tab-page">
+          <h2>Build, Run &amp; Verify</h2>
+          <p>Copy-paste ready. Run from the repo root unless noted.</p>
 
-    <span class="cm">// 1. Build components</span>
-    <span class="tp">SessionRegistry</span>  registry   = <span class="kw">new</span> <span class="tp">SessionRegistry</span>();
-    <span class="tp">RetryClassifier</span>  classifier = <span class="kw">new</span> <span class="tp">RetryClassifier</span>(<span class="tp">RetryClassifier</span>.<span class="fn">defaultRules</span>());
-    <span class="tp">DrainHandler</span>     drain      = <span class="kw">new</span> <span class="tp">DrainHandler</span>(registry, (s, ms) -&gt;
-        log.<span class="fn">info</span>(<span class="str">"[notify] session="</span> + s.<span class="fn">getId</span>() + <span class="str">" remaining="</span> + ms + <span class="str">"ms"</span>));
+          <h3>Prerequisites</h3>
+          <table>
+            <tr><th>Tool</th><th>Version</th><th>Install</th></tr>
+            <tr><td>Docker Desktop</td><td>4.x+</td><td>docker.com</td></tr>
+            <tr><td>kubectl</td><td>1.29+</td><td><code>brew install kubectl</code></td></tr>
+            <tr><td>kind</td><td>0.31+</td><td><code>brew install kind</code></td></tr>
+            <tr><td>Go</td><td>1.22+</td><td><code>brew install go</code></td></tr>
+            <tr><td>Java (optional)</td><td>21+</td><td><code>brew install openjdk@21</code></td></tr>
+          </table>
 
-    <span class="tp">EndpointWatcher</span>.<span class="tp">SessionRebinder</span> rebinder = (s, oldEp, newEp) -&gt;
-        log.<span class="fn">info</span>(<span class="str">"[rebind] session="</span> + s.<span class="fn">getId</span>() + <span class="str">" "</span> + oldEp + <span class="str">" -&gt; "</span> + newEp);
-
-    <span class="cm">// 2. Demonstrate classifier at startup</span>
-    <span class="kw">for</span> (<span class="tp">String</span> method : <span class="kw">new</span> <span class="tp">String</span>[]{
-            <span class="str">"/myapp.v1.MyService/Watch"</span>,
-            <span class="str">"/myapp.v1.MyService/StreamEvents"</span>,
-            <span class="str">"/myapp.v1.MyService/Create"</span>}) {
-        log.<span class="fn">info</span>(<span class="str">"method="</span> + method + <span class="str">" retryClass="</span> + classifier.<span class="fn">classify</span>(method));
-    }
-
-    <span class="cm">// 3. Register a demo session</span>
-    <span class="tp">Session</span> demo = <span class="kw">new</span> <span class="tp">Session</span>();
-    demo.<span class="fn">setId</span>(<span class="str">"demo-session-1"</span>);
-    demo.<span class="fn">setType</span>(Session.Type.GRPC);
-    demo.<span class="fn">setPodName</span>(<span class="str">"myapp-pod-abc"</span>);
-    demo.<span class="fn">setNamespace</span>(namespace);
-    demo.<span class="fn">setEndpoint</span>(<span class="str">"10.0.0.1:50051"</span>);
-    registry.<span class="fn">register</span>(demo);
-
-    <span class="cm">// 4. Connect to Kubernetes and start endpoint watcher</span>
-    <span class="kw">try</span> (<span class="tp">KubernetesClient</span> client = <span class="kw">new</span> <span class="tp">KubernetesClientBuilder</span>().<span class="fn">build</span>()) {
-        <span class="cm">// auto-detects: in-cluster token OR ~/.kube/config</span>
-        <span class="kw">new</span> <span class="tp">EndpointWatcher</span>(registry, rebinder).<span class="fn">watch</span>(client, namespace);
-
-        Thread.<span class="fn">sleep</span>(<span class="num">5000</span>);  <span class="cm">// demo: simulate drain after 5s</span>
-        drain.<span class="fn">handle</span>(<span class="str">"myapp-pod-abc"</span>, namespace, <span class="num">30_000</span>);
-
-        Thread.<span class="fn">currentThread</span>().<span class="fn">join</span>();  <span class="cm">// block until interrupted</span>
-    } <span class="kw">catch</span> (<span class="tp">InterruptedException</span> e) {
-        Thread.<span class="fn">currentThread</span>().<span class="fn">interrupt</span>();
-    }
-}</code><span class="lang-tag">java</span></pre>
-
-<p><code>KubernetesClientBuilder().build()</code> auto-detects configuration in order:</p>
-<ol>
-  <li>In-cluster: reads <code>/var/run/secrets/kubernetes.io/serviceaccount/token</code> and the cluster CA cert</li>
-  <li>Out-of-cluster: reads <code>~/.kube/config</code> (same as <code>kubectl</code>)</li>
-</ol>
-<p>The <code>try-with-resources</code> ensures the HTTP client and watch streams are closed cleanly on exit. <code>Thread.currentThread().join()</code> blocks the main thread indefinitely — the endpoint watcher runs on fabric8's internal thread pool.</p>
-
-<hr>
-<h2 id="java-threading">5.7 Threading Model</h2>
-<p>Understanding which thread runs what is critical for avoiding races in the Java implementation.</p>
-<div class="diagram">Thread: main
-  └── SessionController.main()
-        ├── registry.register()          ← ConcurrentHashMap write, thread-safe
-        ├── classifier.classify()        ← stateless, no sync needed
-        ├── drain.handle()               ← submits to scheduler thread pool
-        └── client.watch()               ← returns immediately, watch on fabric8 thread
-
-Thread: fabric8-watcher-0  (fabric8 internal)
-  └── EndpointWatcher.eventReceived()
-        └── reconcile()
-              ├── registry.byPod()       ← ConcurrentHashMap read, thread-safe
-              └── rebinder.rebind()      ← your callback, runs on this thread
-
-Thread: pool-1-thread-1  (ScheduledExecutorService)
-  └── DrainHandler lambda (every 500ms)
-        ├── registry.byPod()             ← ConcurrentHashMap read, thread-safe
-        └── registry.unregister()        ← ConcurrentHashMap write, thread-safe</div>
-
-<div class="callout info"><p><strong>No explicit synchronization needed</strong> because <code>ConcurrentHashMap</code> handles all cross-thread access to the session store. The only non-thread-safe field is <code>EndpointWatcher.lastKnownAddresses</code> (a plain <code>HashMap</code>) — safe because fabric8 delivers all events on a single watcher thread.</p></div>
-
-<hr>
-<h2 id="java-vs-go">5.8 Java vs Go — Side-by-Side</h2>
-<table>
-  <tr><th>Concern</th><th>Go</th><th>Java</th></tr>
-  <tr>
-    <td>Session store</td>
-    <td><code>map[string]*Session</code> + <code>sync.RWMutex</code></td>
-    <td><code>ConcurrentHashMap&lt;String, Session&gt;</code></td>
-  </tr>
-  <tr>
-    <td>Concurrent reads</td>
-    <td><code>RLock()</code> — explicit, multiple readers unblocked</td>
-    <td>Implicit — CHM never blocks reads</td>
-  </tr>
-  <tr>
-    <td>Drain poll loop</td>
-    <td><code>time.Ticker</code> + <code>select { case &lt;-ctx.Done() }</code></td>
-    <td><code>ScheduledExecutorService.scheduleAtFixedRate</code></td>
-  </tr>
-  <tr>
-    <td>Context cancellation</td>
-    <td>Built-in via <code>context.Context</code> propagation</td>
-    <td>Manual — check a flag or use <code>CompletableFuture</code></td>
-  </tr>
-  <tr>
-    <td>Graceful shutdown</td>
-    <td><code>signal.NotifyContext</code> cancels ctx on SIGTERM</td>
-    <td><code>Runtime.getRuntime().addShutdownHook()</code></td>
-  </tr>
-  <tr>
-    <td>K8s client</td>
-    <td><code>k8s.io/client-go</code> shared informers</td>
-    <td>fabric8 <code>KubernetesClient</code> Watcher</td>
-  </tr>
-  <tr>
-    <td>Watch reconnect</td>
-    <td>Informer handles it automatically</td>
-    <td>fabric8 handles it automatically</td>
-  </tr>
-  <tr>
-    <td>Immutable rule list</td>
-    <td><code>[]Rule</code> slice (convention)</td>
-    <td><code>List.of()</code> — enforced by JDK</td>
-  </tr>
-  <tr>
-    <td>Data carrier type</td>
-    <td>Plain struct</td>
-    <td><code>record</code> (Java 16+)</td>
-  </tr>
-  <tr>
-    <td>Functional interface</td>
-    <td>Interface with single method</td>
-    <td><code>@FunctionalInterface</code> — lambda-compatible</td>
-  </tr>
-</table>
-
-<hr>
-<h2 id="java-pom">5.9 pom.xml — Dependencies Explained</h2>
-<pre><code><span class="cm">&lt;!-- Kubernetes API client — Endpoints watch, pod events --&gt;</span>
-&lt;<span class="kw">dependency</span>&gt;
-  &lt;<span class="kw">groupId</span>&gt;io.fabric8&lt;/<span class="kw">groupId</span>&gt;
-  &lt;<span class="kw">artifactId</span>&gt;kubernetes-client&lt;/<span class="kw">artifactId</span>&gt;
-  &lt;<span class="kw">version</span>&gt;6.10.0&lt;/<span class="kw">version</span>&gt;
-&lt;/<span class="kw">dependency</span>&gt;
-
-<span class="cm">&lt;!-- gRPC transport — Netty-shaded avoids classpath conflicts --&gt;</span>
-&lt;<span class="kw">dependency</span>&gt;
-  &lt;<span class="kw">groupId</span>&gt;io.grpc&lt;/<span class="kw">groupId</span>&gt;
-  &lt;<span class="kw">artifactId</span>&gt;grpc-netty-shaded&lt;/<span class="kw">artifactId</span>&gt;
-  &lt;<span class="kw">version</span>&gt;1.62.2&lt;/<span class="kw">version</span>&gt;
-&lt;/<span class="kw">dependency</span>&gt;
-
-<span class="cm">&lt;!-- gRPC stub + protobuf — for generated service interfaces --&gt;</span>
-&lt;<span class="kw">dependency</span>&gt;
-  &lt;<span class="kw">groupId</span>&gt;io.grpc&lt;/<span class="kw">groupId</span>&gt;
-  &lt;<span class="kw">artifactId</span>&gt;grpc-stub&lt;/<span class="kw">artifactId</span>&gt;
-&lt;/<span class="kw">dependency</span>&gt;
-&lt;<span class="kw">dependency</span>&gt;
-  &lt;<span class="kw">groupId</span>&gt;io.grpc&lt;/<span class="kw">groupId</span>&gt;
-  &lt;<span class="kw">artifactId</span>&gt;grpc-protobuf&lt;/<span class="kw">artifactId</span>&gt;
-&lt;/<span class="kw">dependency</span>&gt;</code><span class="lang-tag">xml</span></pre>
-
-<table>
-  <tr><th>Artifact</th><th>Why this one</th></tr>
-  <tr><td><code>grpc-netty-shaded</code></td><td>Bundles Netty inside a shaded jar — avoids version conflicts with other Netty users (e.g., fabric8 also uses Netty). Use <code>grpc-netty</code> only if you control the full classpath.</td></tr>
-  <tr><td><code>kubernetes-client</code> (fabric8)</td><td>Higher-level API than the official <code>io.kubernetes:client-java</code>. Fluent builder style, auto-reconnecting watchers, and better DSL for common operations.</td></tr>
-  <tr><td>Java 21</td><td>Required for <code>record</code> types (Java 16+) and virtual threads if you extend to <code>Thread.ofVirtual()</code> for per-session goroutine-style concurrency.</td></tr>
-</table>
-
-<hr>
-<h2 id="java-extend">5.10 Extending the Java Implementation</h2>
-
-<h4>Add SIGTERM shutdown hook</h4>
-<pre><code>Runtime.<span class="fn">getRuntime</span>().<span class="fn">addShutdownHook</span>(<span class="kw">new</span> <span class="tp">Thread</span>(() -&gt; {
-    log.<span class="fn">info</span>(<span class="str">"SIGTERM received — draining all sessions"</span>);
-    registry.<span class="fn">byPod</span>(myPodName, namespace)
-            .<span class="fn">forEach</span>(s -&gt; drain.<span class="fn">handle</span>(s.<span class="fn">getPodName</span>(), s.<span class="fn">getNamespace</span>(), <span class="num">25_000</span>));
-}));</code><span class="lang-tag">java</span></pre>
-
-<h4>Add heartbeat via gRPC interceptor</h4>
-<pre><code><span class="kw">public class</span> <span class="tp">HeartbeatInterceptor</span> <span class="kw">implements</span> <span class="tp">ServerInterceptor</span> {
-    <span class="kw">private final</span> <span class="tp">SessionRegistry</span> registry;
-
-    <span class="kw">@Override</span>
-    <span class="kw">public</span> &lt;Q, R&gt; <span class="tp">ServerCall</span>.<span class="tp">Listener</span>&lt;Q&gt; <span class="fn">interceptCall</span>(
-            <span class="tp">ServerCall</span>&lt;Q, R&gt; call, <span class="tp">Metadata</span> headers, <span class="tp">ServerCallHandler</span>&lt;Q, R&gt; next) {
-        <span class="tp">String</span> sessionId = headers.<span class="fn">get</span>(SESSION_ID_KEY);
-        <span class="kw">return new</span> <span class="tp">ForwardingServerCallListener</span>.<span class="tp">SimpleForwardingServerCallListener</span>&lt;Q&gt;(
-                next.<span class="fn">startCall</span>(call, headers)) {
-            <span class="kw">@Override</span>
-            <span class="kw">public void</span> <span class="fn">onMessage</span>(Q message) {
-                <span class="kw">if</span> (sessionId != <span class="kw">null</span>) registry.<span class="fn">heartbeat</span>(sessionId); <span class="cm">// ← heartbeat on every message</span>
-                <span class="kw">super</span>.<span class="fn">onMessage</span>(message);
-            }
-        };
-    }
-}</code><span class="lang-tag">java</span></pre>
-
-<h4>Stale session cleanup loop</h4>
-<pre><code><span class="tp">ScheduledExecutorService</span> cleaner = Executors.<span class="fn">newSingleThreadScheduledExecutor</span>();
-cleaner.<span class="fn">scheduleAtFixedRate</span>(() -&gt; {
-    registry.<span class="fn">stale</span>(<span class="num">90</span>).<span class="fn">forEach</span>(s -&gt; {
-        log.<span class="fn">warning</span>(<span class="str">"[stale] cleaning session="</span> + s.<span class="fn">getId</span>());
-        registry.<span class="fn">unregister</span>(s.<span class="fn">getId</span>());
-    });
-}, <span class="num">60</span>, <span class="num">60</span>, TimeUnit.SECONDS);</code><span class="lang-tag">java</span></pre>
-
-<h4>Switch to EndpointSlice (k8s 1.21+)</h4>
-<pre><code><span class="cm">// Replace in EndpointWatcher.watch():</span>
-client.<span class="fn">discovery</span>().<span class="fn">v1</span>().<span class="fn">endpointSlices</span>().<span class="fn">inNamespace</span>(namespace).<span class="fn">watch</span>(<span class="kw">new</span> <span class="tp">Watcher</span>&lt;<span class="tp">EndpointSlice</span>&gt;() {
-    <span class="kw">@Override</span>
-    <span class="kw">public void</span> <span class="fn">eventReceived</span>(<span class="tp">Action</span> action, <span class="tp">EndpointSlice</span> slice) {
-        <span class="kw">if</span> (action == Action.MODIFIED) reconcileSlice(slice, namespace);
-    }
-    <span class="kw">@Override</span>
-    <span class="kw">public void</span> <span class="fn">onClose</span>(<span class="tp">WatcherException</span> e) {}
-});</code><span class="lang-tag">java</span></pre>
-
-<hr>
-<h2 id="k8s">6. Kubernetes Manifests</h2>
-
-<h3>echoserver-deployment.yaml — Key Settings</h3>
-<table>
-  <tr><th>Setting</th><th>Value</th><th>Why</th></tr>
-  <tr><td><code>terminationGracePeriodSeconds</code></td><td>30</td><td>Window for drain handler to notify sessions before SIGKILL. Match to your longest expected stream duration.</td></tr>
-  <tr><td><code>maxUnavailable</code></td><td>1</td><td>At least replicas-1 pods always serving. Endpoint watcher sees IPs disappear one at a time.</td></tr>
-  <tr><td><code>maxSurge</code></td><td>1</td><td>At most 1 extra pod during rollout.</td></tr>
-  <tr><td><code>readinessProbe.grpc.port</code></td><td>50051</td><td>Uses gRPC health protocol. Pod only added to Endpoints when probe passes.</td></tr>
-  <tr><td><code>imagePullPolicy: Never</code></td><td>—</td><td>Required for kind — images loaded via <code>kind load</code>, not pulled from registry. Remove for real clusters.</td></tr>
-  <tr><td><code>POD_NAME</code> Downward API</td><td>metadata.name</td><td>Injects pod name as env var. Echoserver includes it in every response.</td></tr>
-</table>
-
-<h3>controller-deployment.yaml — RBAC</h3>
-<pre><code><span class="kw">rules:</span>
-  - apiGroups: [<span class="str">""</span>]
-    resources: [<span class="str">"endpoints"</span>, <span class="str">"pods"</span>]
-    verbs: [<span class="str">"get"</span>, <span class="str">"list"</span>, <span class="str">"watch"</span>]</code><span class="lang-tag">yaml</span></pre>
-<p>Read-only access only. The controller never writes to the Kubernetes API — principle of least privilege. <code>rest.InClusterConfig()</code> automatically uses the mounted ServiceAccount token.</p>
-
-<h3>kind Cluster Configs</h3>
-<table>
-  <tr><th>Cluster</th><th>Nodes</th><th>Purpose</th></tr>
-  <tr><td><code>session-cluster-a</code></td><td>1 control-plane + 2 workers</td><td>Tests real cross-node scheduling. Each echoserver pod lands on a different worker.</td></tr>
-  <tr><td><code>session-cluster-b</code></td><td>1 control-plane + 1 worker</td><td>Baseline comparison. Both pods on same worker.</td></tr>
-</table>
-
-<hr>
-<h2 id="tests">7. Test Infrastructure</h2>
-<p>The test script <code>test/run-tests.sh</code> drives three scenarios end-to-end:</p>
-<table>
-  <tr><th>Test</th><th>Mechanism</th><th>What's Checked</th></tr>
-  <tr><td>Retry Classifier</td><td>Read controller startup logs</td><td><code>Watch=safe</code>, <code>StreamEvents=unsafe</code> in output</td></tr>
-  <tr><td>Graceful Drain</td><td><code>kubectl delete pod --grace-period=10</code></td><td>Pod terminates cleanly, deployment self-heals</td></tr>
-  <tr><td>Rolling Update</td><td><code>kubectl set env</code> triggers pod recreation</td><td>Rollout completes, endpoint watcher active throughout</td></tr>
-</table>
-
-<h4>Production Gaps (not tested)</h4>
-<ul>
-  <li>Actual gRPC stream continuity across drain (needs a streaming client)</li>
-  <li>Session rebind correctness (noopRebinder just logs)</li>
-  <li>Stale session cleanup (no heartbeat loop in demo)</li>
-  <li>Multi-cluster session federation</li>
-</ul>
-
-<hr>
-<h2 id="design">8. Key Design Decisions</h2>
-
-<h3>Why interfaces for DrainNotifier and SessionRebinder?</h3>
-<p>The controller doesn't know how your sessions are implemented. You might use <code>grpc.ClientConn.Close()</code> for gRPC channels, <code>websocket.Conn.WriteMessage(websocket.CloseMessage, ...)</code> for WebSockets, or a message queue notification for async clients. By depending on an interface, the controller is transport-agnostic.</p>
-
-<h3>Why poll instead of event-driven drain?</h3>
-<p>Sessions might crash without calling <code>Unregister</code>. The deadline must be enforced regardless of session behavior. Polling is simple and predictable; event-driven would require sessions to signal back. The 500ms interval is a tradeoff — fast enough to react quickly, slow enough not to hammer the tracker's mutex.</p>
-
-<h3>Why UNSAFE as the default RetryClass?</h3>
-<p>An unclassified stream is assumed to be stateful and not safe to retry. You must explicitly opt in to <code>SAFE</code> or <code>CONDITIONAL</code> by adding a rule. The alternative (default to <code>SAFE</code>) would silently allow retries on streams that might cause data corruption. <strong>Fail safe, not fail open.</strong></p>
-
-<h3>Why kind over Docker Desktop's built-in Kubernetes?</h3>
-<p>Docker Desktop ships with a single-node cluster. kind gives you multi-node clusters (test real cross-node scheduling), multiple independent clusters (test multi-cluster scenarios), reproducible cluster configs in YAML, and easy teardown and recreation.</p>
-
-<hr>
-<h2 id="ext">9. Extension Points</h2>
-
-<h3>Replace noopNotifier with real gRPC GOAWAY</h3>
-<pre><code><span class="cm">// Go</span>
-<span class="kw">type</span> <span class="tp">grpcNotifier</span> <span class="kw">struct</span> {
-    conns <span class="kw">map</span>[<span class="tp">string</span>]*grpc.<span class="tp">ClientConn</span>
-}
-<span class="kw">func</span> (n *<span class="tp">grpcNotifier</span>) <span class="fn">Notify</span>(s *api.<span class="tp">Session</span>, deadline time.<span class="tp">Duration</span>) <span class="tp">error</span> {
-    conn := n.conns[s.ID]
-    <span class="kw">return</span> conn.<span class="fn">Close</span>()
-}</code><span class="lang-tag">go</span></pre>
-<pre><code><span class="cm">// Java</span>
-<span class="tp">DrainHandler</span> drainHandler = <span class="kw">new</span> <span class="tp">DrainHandler</span>(registry, (session, remainingMs) -&gt; {
-    <span class="tp">ManagedChannel</span> channel = channelRegistry.<span class="fn">get</span>(session.<span class="fn">getId</span>());
-    <span class="kw">if</span> (channel != <span class="kw">null</span>) {
-        channel.<span class="fn">shutdown</span>();
-        channel.<span class="fn">awaitTermination</span>(remainingMs, TimeUnit.MILLISECONDS);
-    }
-});</code><span class="lang-tag">java</span></pre>
-
-<h3>Add Heartbeat Loop</h3>
-<pre><code><span class="kw">go func</span>() {
-    ticker := time.<span class="fn">NewTicker</span>(<span class="num">30</span> * time.Second)
-    <span class="kw">for range</span> ticker.C { tracker.<span class="fn">Heartbeat</span>(sessionID) }
-}()
-
-<span class="cm">// Periodic stale cleanup</span>
-<span class="kw">go func</span>() {
-    ticker := time.<span class="fn">NewTicker</span>(<span class="num">60</span> * time.Second)
-    <span class="kw">for range</span> ticker.C {
-        <span class="kw">for</span> _, s := <span class="kw">range</span> tracker.<span class="fn">Stale</span>(<span class="num">90</span> * time.Second) {
-            tracker.<span class="fn">Unregister</span>(s.ID)
-        }
-    }
-}()</code><span class="lang-tag">go</span></pre>
-
-<h3>Migrate to EndpointSlice (k8s 1.21+)</h3>
-<pre><code>informer := factory.<span class="fn">Discovery</span>().<span class="fn">V1</span>().<span class="fn">EndpointSlices</span>().<span class="fn">Informer</span>()
-
-informer.<span class="fn">AddEventHandler</span>(cache.<span class="tp">ResourceEventHandlerFuncs</span>{
-    UpdateFunc: <span class="kw">func</span>(old, new <span class="kw">interface</span>{}) {
-        oldSlice := old.(*discoveryv1.<span class="tp">EndpointSlice</span>)
-        newSlice := new.(*discoveryv1.<span class="tp">EndpointSlice</span>)
-        w.<span class="fn">reconcileSlice</span>(oldSlice, newSlice)
-    },
-})</code><span class="lang-tag">go</span></pre>
-
-<h3>Wire Pod Deletion Events for Drain</h3>
-<pre><code>podInformer.<span class="fn">AddEventHandler</span>(cache.<span class="tp">ResourceEventHandlerFuncs</span>{
-    UpdateFunc: <span class="kw">func</span>(old, new <span class="kw">interface</span>{}) {
-        newPod := new.(*corev1.<span class="tp">Pod</span>)
-        <span class="kw">if</span> newPod.DeletionTimestamp != <span class="kw">nil</span> {
-            <span class="cm">// DeletionTimestamp set before SIGTERM — maximum lead time</span>
-            drainHandler.<span class="fn">Handle</span>(ctx, api.<span class="tp">DrainEvent</span>{
-                PodName:   newPod.Name,
-                Namespace: newPod.Namespace,
-                Deadline:  <span class="num">30</span> * time.Second,
-            })
-        }
-    },
-})</code><span class="lang-tag">go</span></pre>
-
-<h3>Persist Sessions as a CRD</h3>
-<pre><code><span class="kw">apiVersion:</span> session.io/v1
-<span class="kw">kind:</span> SessionBinding
-<span class="kw">metadata:</span>
-  <span class="kw">name:</span> demo-session-1
-<span class="kw">spec:</span>
-  <span class="kw">sessionId:</span> demo-session-1
-  <span class="kw">type:</span> grpc
-  <span class="kw">podName:</span> myapp-pod-abc
-  <span class="kw">retryClass:</span> unsafe</code><span class="lang-tag">yaml</span></pre>
-<p>Makes sessions visible via <code>kubectl get sessionbindings</code> and survives controller restarts.</p>
-
-<hr>
-<h2 id="refs">10. Further Reading</h2>
-<h3>gRPC</h3>
-<ul>
-  <li><a href="https://grpc.io/docs/what-is-grpc/core-concepts/" target="_blank">gRPC Core Concepts</a> — streams, metadata, deadlines</li>
-  <li><a href="https://grpc.io/docs/guides/health-checking/" target="_blank">gRPC Health Checking Protocol</a> — how readiness probes work</li>
-  <li><a href="https://grpc.io/docs/guides/keepalive/" target="_blank">gRPC Keepalive</a> — detecting dead connections</li>
-  <li><a href="https://httpwg.org/specs/rfc7540.html#GOAWAY" target="_blank">GOAWAY frame (RFC 7540)</a> — HTTP/2 graceful shutdown signal</li>
-</ul>
-<h3>Kubernetes</h3>
-<ul>
-  <li><a href="https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/" target="_blank">Pod Lifecycle</a> — SIGTERM, grace periods, termination</li>
-  <li><a href="https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/" target="_blank">Endpoints vs EndpointSlice</a> — migration guide</li>
-  <li><a href="https://pkg.go.dev/k8s.io/client-go/informers" target="_blank">client-go Informers</a> — shared informer factory</li>
-  <li><a href="https://kubernetes.io/docs/reference/access-authn-authz/rbac/" target="_blank">RBAC</a> — least-privilege service accounts</li>
-</ul>
-<h3>Go Patterns</h3>
-<ul>
-  <li><a href="https://pkg.go.dev/sync#RWMutex" target="_blank">sync.RWMutex</a> — reader/writer mutex</li>
-  <li><a href="https://pkg.go.dev/os/signal#NotifyContext" target="_blank">signal.NotifyContext</a> — graceful shutdown</li>
-</ul>
-<h3>Java Patterns</h3>
-<ul>
-  <li><a href="https://github.com/fabric8io/kubernetes-client" target="_blank">fabric8 Kubernetes Client</a></li>
-  <li><a href="https://openjdk.org/jeps/395" target="_blank">Java Records (JEP 395)</a></li>
-</ul>
-<h3>Session Layer Theory</h3>
-<ul>
-  <li><a href="https://en.wikipedia.org/wiki/Two_generals%27_problem" target="_blank">Two Generals Problem</a> — why UNSAFE streams can't safely retry</li>
-  <li><a href="https://stripe.com/docs/api/idempotent_requests" target="_blank">Idempotency Keys</a> — the CONDITIONAL retry pattern</li>
-</ul>
-
-<p style="margin-top:40px;color:var(--muted);font-size:12px;">Built and tested on kind 0.31.0 / Kubernetes 1.35.0 / Docker Desktop 28.0.4 / macOS</p>
-</div>
-
-<!-- ═══════════════════════════════════════════════════════ RUNBOOK TAB -->
-<div id="tab-run" class="tab-page">
-
-<h1>Build, Run &amp; Verify</h1>
-<p class="subtitle">Copy-paste ready. Run from the repo root unless told otherwise.</p>
-
-<h2 id="prereqs">Prerequisites</h2>
-<table>
-  <tr><th>Tool</th><th>Min Version</th><th>Install</th></tr>
-  <tr><td>Docker Desktop</td><td>4.x</td><td><a href="https://www.docker.com/products/docker-desktop" target="_blank">docker.com</a></td></tr>
-  <tr><td>kubectl</td><td>1.29+</td><td><code>brew install kubectl</code></td></tr>
-  <tr><td>kind</td><td>0.31+</td><td><code>brew install kind</code></td></tr>
-  <tr><td>Go</td><td>1.22+</td><td><code>brew install go</code></td></tr>
-  <tr><td>Java (optional)</td><td>21+</td><td><code>brew install openjdk@21</code></td></tr>
-  <tr><td>Maven (optional)</td><td>3.9+</td><td><code>brew install maven</code></td></tr>
-</table>
-<pre><code>docker info --format <span class="str">'{{.ServerVersion}}'</span>
-kubectl version --client --short
-kind version
-go version</code><span class="lang-tag">bash</span></pre>
-
-<hr>
-<h2 id="build">Part 1 — Build</h2>
-
-<ol class="steps">
-  <li>
-    <div class="step-body">
-      <div class="step-title">Go — resolve dependencies and compile</div>
-      <pre><code>cd grpc-ws-session-k8s/go
-go mod tidy
-go build ./...</code><span class="lang-tag">bash</span></pre>
-      <p style="font-size:13px;color:var(--muted);">Expected: no output. A clean <code>go build ./...</code> is silent.</p>
-    </div>
-  </li>
-  <li>
-    <div class="step-body">
-      <div class="step-title">Build Docker images (run from grpc-ws-session-k8s/go)</div>
-      <pre><code><span class="cm"># gRPC echo server — test workload</span>
+          <h3>1 — Build</h3>
+          <pre><code><span class="cm"># Go</span>
+cd grpc-ws-session-k8s/go
+go mod tidy && go build ./...
 docker build -t echoserver:test -f cmd/echoserver/Dockerfile .
-
-<span class="cm"># Session survivability controller</span>
 docker build -t session-controller:test -f Dockerfile .</code><span class="lang-tag">bash</span></pre>
-      <pre><code><span class="cm"># Verify</span>
-docker images | grep -E <span class="str">'echoserver|session-controller'</span></code><span class="lang-tag">bash</span></pre>
-    </div>
-  </li>
-  <li>
-    <div class="step-body">
-      <div class="step-title">Java — compile (optional)</div>
-      <pre><code>cd grpc-ws-session-k8s/java
-mvn compile -q</code><span class="lang-tag">bash</span></pre>
-      <p style="font-size:13px;color:var(--muted);">Expected: <code>BUILD SUCCESS</code>. Run either Go or Java in the cluster, not both.</p>
-    </div>
-  </li>
-</ol>
 
-<hr>
-<h2 id="clusters">Part 2 — Cluster Setup</h2>
-
-<ol class="steps">
-  <li>
-    <div class="step-body">
-      <div class="step-title">Create two kind clusters</div>
-      <pre><code>kind create cluster --config grpc-ws-session-k8s/kind-cluster-a.yaml --name session-cluster-a
+          <h3>2 — Create clusters</h3>
+          <pre><code>kind create cluster --config grpc-ws-session-k8s/kind-cluster-a.yaml --name session-cluster-a
 kind create cluster --config grpc-ws-session-k8s/kind-cluster-b.yaml --name session-cluster-b</code><span class="lang-tag">bash</span></pre>
-      <p style="font-size:13px;color:var(--muted);">Each takes ~60s. cluster-a: 1 control-plane + 2 workers. cluster-b: 1 control-plane + 1 worker.</p>
-      <pre><code>kind get clusters
-kubectl config get-contexts</code><span class="lang-tag">bash</span></pre>
-    </div>
-  </li>
-  <li>
-    <div class="step-body">
-      <div class="step-title">Load images into both clusters</div>
-      <p style="font-size:13px;color:var(--muted);margin-bottom:8px;">kind clusters are isolated Docker networks — images must be loaded explicitly.</p>
-      <pre><code>kind load docker-image echoserver:test         --name session-cluster-a
-kind load docker-image session-controller:test  --name session-cluster-a
 
+          <h3>3 — Load images</h3>
+          <pre><code>kind load docker-image echoserver:test         --name session-cluster-a
+kind load docker-image session-controller:test  --name session-cluster-a
 kind load docker-image echoserver:test         --name session-cluster-b
 kind load docker-image session-controller:test  --name session-cluster-b</code><span class="lang-tag">bash</span></pre>
-      <pre><code><span class="cm"># Verify on cluster-a</span>
-docker exec session-cluster-a-worker crictl images 2>/dev/null | grep echoserver</code><span class="lang-tag">bash</span></pre>
-    </div>
-  </li>
-</ol>
 
-<hr>
-<h2 id="deploy">Part 3 — Deploy</h2>
+          <h3>4 — Deploy</h3>
+          <pre><code>for ctx in kind-session-cluster-a kind-session-cluster-b; do
+  kubectl --context $ctx create namespace session-test --dry-run=client -o yaml | kubectl --context $ctx apply -f -
+  kubectl --context $ctx apply -f grpc-ws-session-k8s/k8s/
+done</code><span class="lang-tag">bash</span></pre>
 
-<ol class="steps">
-  <li>
-    <div class="step-body">
-      <div class="step-title">Deploy to cluster-a</div>
-      <pre><code>kubectl --context kind-session-cluster-a \
-  create namespace session-test --dry-run=client -o yaml \
-  | kubectl --context kind-session-cluster-a apply -f -
+          <h3>5 — Verify</h3>
+          <div class="verify"><div class="icon">✅</div><div><strong>Retry classifier</strong><p><code>kubectl --context kind-session-cluster-a -n session-test logs deployment/session-controller | head -3</code></p></div></div>
+          <div class="verify"><div class="icon">✅</div><div><strong>Drain</strong><p><code>kubectl -n session-test delete pod $(kubectl -n session-test get pods -l app=echoserver -o name | head -1) --grace-period=10</code></p></div></div>
+          <div class="verify"><div class="icon">✅</div><div><strong>Rolling update</strong><p><code>kubectl --context kind-session-cluster-a -n session-test set env deployment/echoserver ROLLOUT_ID="$(date +%s)"</code></p></div></div>
+          <div class="verify"><div class="icon">✅</div><div><strong>RBAC</strong><p><code>kubectl auth can-i delete pods --as=system:serviceaccount:session-test:session-controller -n session-test</code> → <code>no</code></p></div></div>
+          <div class="verify"><div class="icon">✅</div><div><strong>Full script</strong><p><code>./grpc-ws-session-k8s/test/run-tests.sh</code></p></div></div>
 
-kubectl --context kind-session-cluster-a apply -f grpc-ws-session-k8s/k8s/echoserver-deployment.yaml
-kubectl --context kind-session-cluster-a apply -f grpc-ws-session-k8s/k8s/controller-deployment.yaml</code><span class="lang-tag">bash</span></pre>
-    </div>
-  </li>
-  <li>
-    <div class="step-body">
-      <div class="step-title">Deploy to cluster-b</div>
-      <pre><code>kubectl --context kind-session-cluster-b \
-  create namespace session-test --dry-run=client -o yaml \
-  | kubectl --context kind-session-cluster-b apply -f -
+          <h3>Cleanup</h3>
+          <pre><code>kind delete cluster --name session-cluster-a
+kind delete cluster --name session-cluster-b</code><span class="lang-tag">bash</span></pre>
 
-kubectl --context kind-session-cluster-b apply -f grpc-ws-session-k8s/k8s/echoserver-deployment.yaml
-kubectl --context kind-session-cluster-b apply -f grpc-ws-session-k8s/k8s/controller-deployment.yaml</code><span class="lang-tag">bash</span></pre>
-    </div>
-  </li>
-  <li>
-    <div class="step-body">
-      <div class="step-title">Wait for rollout</div>
-      <pre><code>kubectl --context kind-session-cluster-a -n session-test rollout status deployment/echoserver --timeout=120s
-kubectl --context kind-session-cluster-a -n session-test rollout status deployment/session-controller --timeout=60s
-kubectl --context kind-session-cluster-b -n session-test rollout status deployment/echoserver --timeout=120s
-kubectl --context kind-session-cluster-b -n session-test rollout status deployment/session-controller --timeout=60s</code><span class="lang-tag">bash</span></pre>
-      <p style="font-size:13px;color:var(--muted);">Expected: <code>deployment "..." successfully rolled out</code> for each.</p>
-    </div>
-  </li>
-</ol>
+          <h3>Troubleshooting</h3>
+          <details class="trouble"><summary>Pod stuck in ImagePullBackOff</summary><div class="tbody"><p>Images must be loaded via <code>kind load</code> — they can't be pulled from your local daemon automatically.</p><pre><code>kind load docker-image echoserver:test --name session-cluster-a</code><span class="lang-tag">bash</span></pre></div></details>
+          <details class="trouble"><summary>Controller crashes with "k8s config: ..."</summary><div class="tbody"><p>Uses <code>InClusterConfig</code> — must run inside the cluster. For local testing switch to <code>clientcmd.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))</code>.</p></div></details>
+          <details class="trouble"><summary>Deprecation warnings about v1 Endpoints</summary><div class="tbody"><p>Expected on k8s 1.33+. Migrate to <code>factory.Discovery().V1().EndpointSlices().Informer()</code>.</p></div></details>
+        </div>
 
-<hr>
-<h2 id="verify">Part 4 — Verify</h2>
+      </div><!-- readme-body -->
+    </div><!-- readme-card -->
+  </main>
+</div><!-- layout -->
 
-<div class="verify">
-  <div class="icon">✅</div>
-  <div class="body">
-    <strong>Verify 1 — Pod placement</strong>
-    <p>cluster-a: 2 echoserver pods on different worker nodes. cluster-b: both on single worker.</p>
-  </div>
-</div>
-<pre><code>kubectl --context kind-session-cluster-a -n session-test get pods -o wide
-kubectl --context kind-session-cluster-b -n session-test get pods -o wide</code><span class="lang-tag">bash</span></pre>
-
-<div class="verify">
-  <div class="icon">✅</div>
-  <div class="body">
-    <strong>Verify 2 — Retry classifier</strong>
-    <p>First two log lines must show <code>Watch=safe</code> and <code>StreamEvents=unsafe</code>.</p>
-  </div>
-</div>
-<pre><code>kubectl --context kind-session-cluster-a -n session-test logs deployment/session-controller | head -5</code><span class="lang-tag">bash</span></pre>
-<pre><code>method=/myapp.v1.MyService/Watch retryClass=safe
-method=/myapp.v1.MyService/StreamEvents retryClass=unsafe
-session controller running namespace=session-test</code><span class="lang-tag">expected output</span></pre>
-
-<div class="verify">
-  <div class="icon">✅</div>
-  <div class="body">
-    <strong>Verify 3 — Graceful drain</strong>
-    <p>Delete a pod with 10s grace period. Deployment self-heals. Controller logs show drain sequence.</p>
-  </div>
-</div>
-<pre><code>POD=$(kubectl --context kind-session-cluster-a -n session-test \
-      get pods -l app=echoserver -o jsonpath='{.items[0].metadata.name}')
-kubectl --context kind-session-cluster-a -n session-test delete pod "$POD" --grace-period=10
-kubectl --context kind-session-cluster-a -n session-test rollout status deployment/echoserver --timeout=60s</code><span class="lang-tag">bash</span></pre>
-<pre><code>[drain] pod=session-test/myapp-pod-abc sessions=1 deadline=30s
-[notify] session=demo-session-1 type=grpc deadline=29.999s
-[drain] deadline hit, 1 sessions force-closed</code><span class="lang-tag">expected controller logs</span></pre>
-
-<div class="verify">
-  <div class="icon">✅</div>
-  <div class="body">
-    <strong>Verify 4 — Rolling update + endpoint rebinding</strong>
-    <p>Trigger rollout via env patch. Watch endpoint IPs change as pods cycle.</p>
-  </div>
-</div>
-<pre><code>kubectl --context kind-session-cluster-a -n session-test \
-  set env deployment/echoserver ROLLOUT_ID="$(date +%s)"
-kubectl --context kind-session-cluster-a -n session-test \
-  rollout status deployment/echoserver --timeout=120s
-kubectl --context kind-session-cluster-a -n session-test \
-  get endpoints echoserver -w</code><span class="lang-tag">bash</span></pre>
-
-<div class="verify">
-  <div class="icon">✅</div>
-  <div class="body">
-    <strong>Verify 5 — RBAC least privilege</strong>
-    <p>Controller can read endpoints/pods but cannot delete pods.</p>
-  </div>
-</div>
-<pre><code><span class="cm"># Should print: yes</span>
-kubectl --context kind-session-cluster-a auth can-i list endpoints \
-  --as=system:serviceaccount:session-test:session-controller -n session-test
-
-kubectl --context kind-session-cluster-a auth can-i watch pods \
-  --as=system:serviceaccount:session-test:session-controller -n session-test
-
-<span class="cm"># Should print: no</span>
-kubectl --context kind-session-cluster-a auth can-i delete pods \
-  --as=system:serviceaccount:session-test:session-controller -n session-test</code><span class="lang-tag">bash</span></pre>
-
-<div class="verify">
-  <div class="icon">✅</div>
-  <div class="body">
-    <strong>Verify 6 — gRPC health check</strong>
-    <p>Port-forward and probe the health endpoint directly.</p>
-  </div>
-</div>
-<pre><code>kubectl --context kind-session-cluster-a -n session-test \
-  port-forward deployment/echoserver 50051:50051 &amp;
-
-go install github.com/grpc-ecosystem/grpc-health-probe@latest
-grpc_health_probe -addr=localhost:50051
-<span class="cm"># status: SERVING</span>
-
-kill %1</code><span class="lang-tag">bash</span></pre>
-
-<div class="verify">
-  <div class="icon">✅</div>
-  <div class="body">
-    <strong>Verify 7 — Full automated test script</strong>
-    <p>Runs all three scenarios end-to-end.</p>
-  </div>
-</div>
-<pre><code>chmod +x grpc-ws-session-k8s/test/run-tests.sh
-./grpc-ws-session-k8s/test/run-tests.sh
-<span class="cm"># Expected: [HH:MM:SS] all tests passed</span></code><span class="lang-tag">bash</span></pre>
-
-<hr>
-<h2 id="observe">Part 5 — Observe Live Behavior</h2>
-
-<h3>Watch both clusters simultaneously</h3>
-<pre><code><span class="cm"># Terminal 1</span>
-watch -n2 'kubectl --context kind-session-cluster-a -n session-test get pods -o wide'
-
-<span class="cm"># Terminal 2</span>
-watch -n2 'kubectl --context kind-session-cluster-b -n session-test get pods -o wide'</code><span class="lang-tag">bash</span></pre>
-
-<h3>Stream controller logs from both clusters</h3>
-<pre><code><span class="cm"># Terminal 1</span>
-kubectl --context kind-session-cluster-a -n session-test logs deployment/session-controller -f
-
-<span class="cm"># Terminal 2</span>
-kubectl --context kind-session-cluster-b -n session-test logs deployment/session-controller -f</code><span class="lang-tag">bash</span></pre>
-
-<h3>Describe a pod to see lifecycle events</h3>
-<pre><code>kubectl --context kind-session-cluster-a -n session-test \
-  describe pod -l app=echoserver | tail -20
-<span class="cm"># Look for: Killing, Started events showing the drain/replace cycle</span></code><span class="lang-tag">bash</span></pre>
-
-<hr>
-<h2 id="cleanup">Part 6 — Cleanup</h2>
-
-<pre><code><span class="cm"># Remove deployments only (keep clusters)</span>
-kubectl --context kind-session-cluster-a delete namespace session-test
-kubectl --context kind-session-cluster-b delete namespace session-test
-
-<span class="cm"># Tear down clusters entirely</span>
-kind delete cluster --name session-cluster-a
-kind delete cluster --name session-cluster-b
-
-<span class="cm"># Verify gone</span>
-kind get clusters
-kubectl config get-contexts | grep kind-session</code><span class="lang-tag">bash</span></pre>
-
-<hr>
-<h2 id="trouble">Troubleshooting</h2>
-
-<details class="trouble">
-  <summary>Pod stuck in ImagePullBackOff</summary>
-  <div class="trouble-body">
-    <p><code>imagePullPolicy: Never</code> requires the image to be loaded via <code>kind load</code>.</p>
-    <pre><code>kind load docker-image echoserver:test --name session-cluster-a
-kind load docker-image session-controller:test --name session-cluster-a</code><span class="lang-tag">bash</span></pre>
-  </div>
-</details>
-
-<details class="trouble">
-  <summary>Controller crashes with "k8s config: ..."</summary>
-  <div class="trouble-body">
-    <p>The controller uses <code>InClusterConfig</code> — it must run inside the cluster. For local testing outside a cluster, switch to kubeconfig:</p>
-    <pre><code>cfg, err := clientcmd.<span class="fn">BuildConfigFromFlags</span>(<span class="str">""</span>, os.<span class="fn">Getenv</span>(<span class="str">"KUBECONFIG"</span>))</code><span class="lang-tag">go</span></pre>
-  </div>
-</details>
-
-<details class="trouble">
-  <summary>rollout status times out</summary>
-  <div class="trouble-body">
-    <pre><code>kubectl --context kind-session-cluster-a -n session-test describe pods</code><span class="lang-tag">bash</span></pre>
-    <p>Check pod events for the real error — usually image pull, resource limits, or readiness probe failure.</p>
-  </div>
-</details>
-
-<details class="trouble">
-  <summary>grpc_health_probe not found</summary>
-  <div class="trouble-body">
-    <pre><code>go install github.com/grpc-ecosystem/grpc-health-probe@latest
-export PATH=$PATH:$(go env GOPATH)/bin</code><span class="lang-tag">bash</span></pre>
-  </div>
-</details>
-
-<details class="trouble">
-  <summary>kind cluster creation fails</summary>
-  <div class="trouble-body">
-    <p>Ensure Docker Desktop is running with enough resources (recommended: 4 CPU, 8GB RAM).</p>
-    <pre><code>docker info | grep -E <span class="str">'CPUs|Total Memory'</span></code><span class="lang-tag">bash</span></pre>
-  </div>
-</details>
-
-<details class="trouble">
-  <summary>Deprecation warnings about v1 Endpoints</summary>
-  <div class="trouble-body">
-    <p>Expected on Kubernetes 1.33+. The watcher works but for production migrate to EndpointSlice:</p>
-    <pre><code>informer := factory.<span class="fn">Discovery</span>().<span class="fn">V1</span>().<span class="fn">EndpointSlices</span>().<span class="fn">Informer</span>()</code><span class="lang-tag">go</span></pre>
-  </div>
-</details>
-
-</div><!-- end tab-run -->
-</main>
+<footer>
+  <p>Built and tested on kind 0.31.0 · Kubernetes 1.35.0 · Docker Desktop 28.0.4 · macOS &nbsp;·&nbsp; <a href="concepts.html">Conceptual Overview</a></p>
+</footer>
 
 <script>
 function showTab(name) {
   document.querySelectorAll('.tab-page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.page-tab').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
-  document.querySelectorAll('.tab-btn').forEach(b => {
-    if (b.textContent.toLowerCase().includes(name === 'learn' ? 'learning' : 'build')) {
-      b.classList.add('active');
-    }
-  });
+  event.currentTarget.classList.add('active');
 }
-
-function scrollTo(id) {
-  setTimeout(() => {
-    const el = document.getElementById(id);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, 50);
-}
-
-// Highlight active nav link on scroll
-const observer = new IntersectionObserver((entries) => {
-  entries.forEach(e => {
-    if (e.isIntersecting) {
-      document.querySelectorAll('nav a').forEach(a => a.classList.remove('active'));
-      const id = e.target.id;
-      const link = document.querySelector(`nav a[onclick*="'${id}'"]`);
-      if (link) link.classList.add('active');
-    }
-  });
-}, { threshold: 0.3 });
-
-document.querySelectorAll('h2[id]').forEach(h => observer.observe(h));
 </script>
 </body>
 </html>

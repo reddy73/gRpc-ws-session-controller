@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Conceptual Overview — gRpc-ws-session-controller</title>
+<style>
+:root {
+  --bg: #ffffff; --canvas: #f6f8fa; --border: #d0d7de;
+  --text: #1f2328; --muted: #656d76; --link: #0969da;
+  --header: #24292f; --header-text: #f0f6fc;
+  --code-bg: #f6f8fa; --pre-bg: #f6f8fa;
+  --safe-bg: #dafbe1; --safe-text: #116329;
+  --unsafe-bg: #ffebe9; --unsafe-text: #82071e;
+  --cond-bg: #fff8c5; --cond-text: #7d4e00;
+  --purple: #8250df; --orange: #bc4c00;
+  --sidebar-w: 240px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.6; }
+
+/* topbar */
+.topbar { background: var(--header); height: 48px; display: flex; align-items: center; padding: 0 16px; gap: 12px; position: sticky; top: 0; z-index: 100; }
+.topbar svg { fill: var(--header-text); opacity: .8; }
+.topbar .crumb { color: rgba(240,246,252,.7); font-size: 14px; display: flex; align-items: center; gap: 6px; }
+.topbar .crumb a { color: rgba(240,246,252,.7); text-decoration: none; }
+.topbar .crumb a:hover { color: var(--header-text); text-decoration: underline; }
+.topbar .crumb .sep { color: rgba(240,246,252,.3); }
+.topbar .crumb strong { color: var(--header-text); }
+
+/* hero */
+.hero { background: linear-gradient(135deg, #0d1117 0%, #161b22 50%, #0d1117 100%); color: #e6edf3; padding: 64px 24px; text-align: center; border-bottom: 1px solid #30363d; }
+.hero .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: #58a6ff; margin-bottom: 16px; }
+.hero h1 { font-size: 36px; font-weight: 700; line-height: 1.2; margin-bottom: 16px; }
+.hero h1 span { color: #58a6ff; }
+.hero p { font-size: 16px; color: #8b949e; max-width: 600px; margin: 0 auto 24px; line-height: 1.7; }
+.hero .links { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.hero .btn { padding: 8px 20px; border-radius: 6px; font-size: 14px; font-weight: 500; text-decoration: none; }
+.hero .btn-primary { background: #238636; color: #fff; border: 1px solid #2ea043; }
+.hero .btn-secondary { background: rgba(255,255,255,.08); color: #e6edf3; border: 1px solid rgba(255,255,255,.15); }
+.hero .btn:hover { opacity: .85; }
+
+/* layout */
+.layout { display: flex; max-width: 1200px; margin: 0 auto; padding: 32px 16px; gap: 32px; }
+.toc-nav { width: var(--sidebar-w); flex-shrink: 0; position: sticky; top: 64px; height: fit-content; }
+.toc-nav h4 { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 10px; }
+.toc-nav a { display: block; padding: 4px 0 4px 12px; font-size: 13px; color: var(--muted); text-decoration: none; border-left: 2px solid var(--border); transition: all .1s; }
+.toc-nav a:hover { color: var(--link); border-left-color: var(--link); }
+.toc-nav a.active { color: var(--link); border-left-color: var(--link); font-weight: 500; }
+.toc-nav .section { margin-top: 12px; }
+.toc-nav .section-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; padding: 6px 0 2px 12px; }
+article { flex: 1; min-width: 0; max-width: 800px; }
+
+/* section cards */
+.section { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 32px; overflow: hidden; }
+.section-head { background: var(--canvas); border-bottom: 1px solid var(--border); padding: 14px 20px; display: flex; align-items: center; gap: 12px; }
+.section-head .num { width: 28px; height: 28px; border-radius: 50%; background: var(--link); color: #fff; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.section-head h2 { font-size: 16px; font-weight: 600; margin: 0; }
+.section-body { padding: 20px 24px; }
+
+/* typography */
+h3 { font-size: 15px; font-weight: 600; margin: 20px 0 8px; }
+h4 { font-size: 13px; font-weight: 600; color: var(--muted); margin: 16px 0 6px; text-transform: uppercase; letter-spacing: .04em; }
+p { margin-bottom: 12px; line-height: 1.7; }
+a { color: var(--link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+ul, ol { margin: 0 0 12px 22px; }
+li { margin-bottom: 4px; line-height: 1.6; }
+strong { font-weight: 600; }
+hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+code { background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 85%; }
+pre { background: var(--pre-bg); border: 1px solid var(--border); border-radius: 6px; padding: 16px; overflow-x: auto; margin: 12px 0; position: relative; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; line-height: 1.6; }
+pre code { background: none; border: none; padding: 0; }
+.lang-tag { position: absolute; top: 8px; right: 10px; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14px; }
+th { background: var(--canvas); font-weight: 600; text-align: left; padding: 8px 12px; border: 1px solid var(--border); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+td { padding: 8px 12px; border: 1px solid var(--border); vertical-align: top; }
+tr:nth-child(even) td { background: var(--canvas); }
+
+/* callouts */
+.note  { background: #ddf4ff; border: 1px solid #54aeff66; border-radius: 6px; padding: 12px 16px; margin: 12px 0; font-size: 14px; }
+.warn  { background: #fff8c5; border: 1px solid #d4a72c66; border-radius: 6px; padding: 12px 16px; margin: 12px 0; font-size: 14px; }
+.danger{ background: #ffebe9; border: 1px solid #ff818266; border-radius: 6px; padding: 12px 16px; margin: 12px 0; font-size: 14px; }
+.tip   { background: #dafbe1; border: 1px solid #4ac26b55; border-radius: 6px; padding: 12px 16px; margin: 12px 0; font-size: 14px; }
+.note strong, .warn strong, .danger strong, .tip strong { display: block; margin-bottom: 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+.note strong { color: #0550ae; }
+.warn strong { color: #7d4e00; }
+.danger strong { color: #82071e; }
+.tip strong { color: #116329; }
+
+/* diagram */
+.diagram { background: var(--pre-bg); border: 1px solid var(--border); border-radius: 6px; padding: 16px; overflow-x: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.5; color: var(--muted); white-space: pre; margin: 12px 0; }
+
+/* badges */
+.badge { display: inline-block; padding: 2px 10px; border-radius: 2em; font-size: 12px; font-weight: 600; font-family: monospace; }
+.badge.safe   { background: var(--safe-bg);   color: var(--safe-text);   border: 1px solid #4ac26b55; }
+.badge.unsafe { background: var(--unsafe-bg); color: var(--unsafe-text); border: 1px solid #ff818266; }
+.badge.cond   { background: var(--cond-bg);   color: var(--cond-text);   border: 1px solid #d4a72c66; }
+
+/* comparison grid */
+.compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+.compare-card { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.compare-card .ch { background: var(--canvas); border-bottom: 1px solid var(--border); padding: 8px 14px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.compare-card .cb { padding: 12px 14px; font-size: 13px; }
+.compare-card .cb li { margin-bottom: 6px; }
+
+/* timeline */
+.timeline { position: relative; padding-left: 28px; margin: 16px 0; }
+.timeline::before { content: ''; position: absolute; left: 8px; top: 0; bottom: 0; width: 2px; background: var(--border); }
+.tl-item { position: relative; margin-bottom: 20px; }
+.tl-item::before { content: ''; position: absolute; left: -24px; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: var(--link); border: 2px solid var(--bg); }
+.tl-item .tl-title { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+.tl-item .tl-body { font-size: 13px; color: var(--muted); }
+
+/* osi layers */
+.osi { display: flex; flex-direction: column; gap: 3px; margin: 16px 0; }
+.osi-row { display: flex; align-items: center; border-radius: 4px; overflow: hidden; font-size: 13px; }
+.osi-num { width: 32px; text-align: center; padding: 8px 0; font-weight: 700; font-size: 11px; flex-shrink: 0; }
+.osi-name { padding: 8px 14px; flex: 1; font-weight: 500; }
+.osi-note { padding: 8px 14px; color: var(--muted); font-size: 12px; flex: 2; }
+.osi-row.highlight .osi-name { font-weight: 700; }
+
+/* syntax */
+.kw  { color: #cf222e; }
+.fn  { color: #8250df; }
+.str { color: #0a3069; }
+.cm  { color: #6e7781; font-style: italic; }
+.tp  { color: #953800; }
+
+/* footer */
+footer { border-top: 1px solid var(--border); padding: 24px 16px; text-align: center; font-size: 12px; color: var(--muted); }
+footer a { color: var(--link); }
+
+@media (max-width: 768px) {
+  .toc-nav { display: none; }
+  .compare { grid-template-columns: 1fr; }
+  .hero h1 { font-size: 26px; }
+}
+</style>
+</head>
+<body>
+<!-- topbar -->
+<header class="topbar">
+  <svg height="28" viewBox="0 0 16 16" width="28"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+  <div class="crumb">
+    <a href="#">reddy73</a><span class="sep">/</span>
+    <a href="index.html">gRpc-ws-session-controller</a><span class="sep">/</span>
+    <strong>Conceptual Overview</strong>
+  </div>
+</header>
+
+<!-- hero -->
+<div class="hero">
+  <div class="eyebrow">Conceptual Overview</div>
+  <h1>The <span>Session Layer Gap</span><br>in Kubernetes</h1>
+  <p>Why gRPC streams and WebSockets break when pods restart, and how a session-layer controller fills the gap that Kubernetes leaves open.</p>
+  <div class="links">
+    <a class="btn btn-primary" href="index.html">← Back to Repo</a>
+    <a class="btn btn-secondary" href="RUNBOOK.md">Runbook</a>
+  </div>
+</div>
+
+<div class="layout">
+  <!-- toc -->
+  <nav class="toc-nav">
+    <h4>On this page</h4>
+    <a href="#osi">1. The OSI Gap</a>
+    <a href="#problem">2. The Problem</a>
+    <a href="#anatomy">3. Anatomy of a Failure</a>
+    <a href="#retry">4. Retry Safety</a>
+    <a href="#solution">5. The Solution</a>
+    <a href="#drain">6. Graceful Drain</a>
+    <a href="#rebind">7. Endpoint Rebinding</a>
+    <a href="#heartbeat">8. Heartbeat &amp; Stale</a>
+    <a href="#tradeoffs">9. Tradeoffs</a>
+    <a href="#further">10. Further Reading</a>
+  </nav>
+
+  <article>
+
+    <!-- 1. OSI Gap -->
+    <div class="section" id="osi">
+      <div class="section-head"><div class="num">1</div><h2>The OSI Session Layer Gap</h2></div>
+      <div class="section-body">
+        <p>The OSI model defines seven layers of network communication. Kubernetes is a layer 3/4 system — it routes IP packets and manages TCP connections. It has no awareness of what those connections carry.</p>
+
+        <div class="osi">
+          <div class="osi-row" style="background:#f6f8fa"><div class="osi-num" style="background:#d0d7de;color:#656d76">7</div><div class="osi-name">Application</div><div class="osi-note">gRPC, WebSocket, HTTP — your code lives here</div></div>
+          <div class="osi-row" style="background:#f6f8fa"><div class="osi-num" style="background:#d0d7de;color:#656d76">6</div><div class="osi-name">Presentation</div><div class="osi-note">TLS, encoding</div></div>
+          <div class="osi-row highlight" style="background:#ddf4ff;border:1px solid #54aeff66"><div class="osi-num" style="background:#0969da;color:#fff">5</div><div class="osi-name" style="color:#0550ae">Session ← this project</div><div class="osi-note" style="color:#0550ae">Connection state, drain, rebind, retry classification</div></div>
+          <div class="osi-row" style="background:#f6f8fa"><div class="osi-num" style="background:#d0d7de;color:#656d76">4</div><div class="osi-name">Transport</div><div class="osi-note">TCP — Kubernetes kube-proxy, Services</div></div>
+          <div class="osi-row" style="background:#f6f8fa"><div class="osi-num" style="background:#d0d7de;color:#656d76">3</div><div class="osi-name">Network</div><div class="osi-note">IP — Kubernetes pod networking, CNI</div></div>
+          <div class="osi-row" style="background:#f6f8fa"><div class="osi-num" style="background:#d0d7de;color:#656d76">2</div><div class="osi-name">Data Link</div><div class="osi-note">Ethernet, node networking</div></div>
+          <div class="osi-row" style="background:#f6f8fa"><div class="osi-num" style="background:#d0d7de;color:#656d76">1</div><div class="osi-name">Physical</div><div class="osi-note">Hardware</div></div>
+        </div>
+
+        <p>Layer 5 — the session layer — is responsible for establishing, managing, and terminating sessions between applications. It is the layer that knows a conversation is in progress and can coordinate a graceful end to it. Kubernetes provides nothing here. This project fills that gap.</p>
+      </div>
+    </div>
+
+    <!-- 2. The Problem -->
+    <div class="section" id="problem">
+      <div class="section-head"><div class="num">2</div><h2>The Problem in Detail</h2></div>
+      <div class="section-body">
+        <h3>HTTP/1.1 is stateless — gRPC streams are not</h3>
+        <p>A standard HTTP/1.1 request is a complete, self-contained unit. The client sends a request, the server responds, the connection closes (or is reused for the next independent request). If the server pod restarts mid-request, the client gets a connection error and retries. The retry is safe because the request carries all its context.</p>
+
+        <p>A gRPC bidirectional stream is fundamentally different. It is a long-lived conversation:</p>
+        <div class="diagram">Client                              Server (pod)
+  │                                    │
+  │── StreamEcho open ─────────────────►│
+  │── msg #1 "hello" ──────────────────►│
+  │◄─ msg #1 echo "hello" ─────────────│
+  │── msg #2 "world" ──────────────────►│
+  │                                    │  ← pod receives SIGTERM here
+  │◄─ RST_STREAM (connection reset) ───│  ← TCP closed by OS
+  │
+  │  Client now has a choice:
+  │  • Reconnect and replay from msg #1? (may duplicate)
+  │  • Reconnect and replay from msg #3? (needs sequence tracking)
+  │  • Give up?                         (data loss)</div>
+
+        <p>The client has no way to know how many messages the server processed before dying. Replaying from the beginning may cause duplicates. Replaying from an assumed checkpoint may cause gaps. This is the <strong>Two Generals Problem</strong> applied to streaming RPCs.</p>
+
+        <h3>WebSockets have the same problem</h3>
+        <p>A WebSocket connection is a persistent, full-duplex channel. It carries application state — a chat session, a live dashboard subscription, a collaborative editing stream. When the pod hosting that connection is terminated, the client receives a TCP RST and must decide what to do. Unlike HTTP, there is no idempotent "retry the request" — the session state is gone.</p>
+
+        <h3>Kubernetes makes this worse</h3>
+        <p>Kubernetes terminates pods routinely — rolling updates, node pressure, health check failures, manual scaling. In a healthy cluster, pods are ephemeral. Any architecture that assumes a pod will live for the duration of a long-lived connection is fragile by design.</p>
+
+        <div class="compare">
+          <div class="compare-card">
+            <div class="ch">🟢 HTTP/1.1 — safe</div>
+            <div class="cb"><ul>
+              <li>Stateless per request</li>
+              <li>Client retries transparently</li>
+              <li>Load balancer can route to any pod</li>
+              <li>Pod restart is invisible to the user</li>
+            </ul></div>
+          </div>
+          <div class="compare-card">
+            <div class="ch">🔴 gRPC Stream / WebSocket — unsafe</div>
+            <div class="cb"><ul>
+              <li>Stateful conversation in progress</li>
+              <li>Retry may duplicate or lose messages</li>
+              <li>Pinned to a specific pod IP</li>
+              <li>Pod restart breaks the session</li>
+            </ul></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Anatomy of a Failure -->
+    <div class="section" id="anatomy">
+      <div class="section-head"><div class="num">3</div><h2>Anatomy of a Session Failure</h2></div>
+      <div class="section-body">
+        <h3>Scenario A — Rolling update (most common)</h3>
+        <div class="timeline">
+          <div class="tl-item"><div class="tl-title">t=0 — Rollout begins</div><div class="tl-body">Kubernetes updates the Deployment. ReplicaSet creates a new pod with the new image.</div></div>
+          <div class="tl-item"><div class="tl-title">t=5s — New pod becomes Ready</div><div class="tl-body">Readiness probe passes. New pod IP is added to the Endpoints object. New connections route to the new pod.</div></div>
+          <div class="tl-item"><div class="tl-title">t=6s — Old pod receives SIGTERM</div><div class="tl-body">Kubernetes sends SIGTERM to the old pod. The process has <code>terminationGracePeriodSeconds</code> to finish up.</div></div>
+          <div class="tl-item"><div class="tl-title">t=6s — Active gRPC streams on old pod</div><div class="tl-body">Any client with an open stream to the old pod's IP is still connected. The Endpoints object no longer lists the old IP, but the TCP connection is still alive.</div></div>
+          <div class="tl-item"><div class="tl-title">t=36s — SIGKILL</div><div class="tl-body">OS kills the process. All open TCP connections are reset. Clients receive <code>RST_STREAM</code> or connection refused. Sessions are broken.</div></div>
+        </div>
+        <div class="warn"><strong>⚠ The gap</strong>Between SIGTERM and SIGKILL, active streams are in a zombie state — the pod is dying but the TCP connection is still open. Without a drain mechanism, clients don't know to reconnect until the connection is forcibly closed.</div>
+
+        <h3>Scenario B — Pod crash (OOMKilled, panic)</h3>
+        <p>No SIGTERM. No grace period. The process dies instantly. All open connections are reset simultaneously. Clients get a sudden <code>RST_STREAM</code> with no warning. This is the worst case — there is no time to drain. The session controller detects this via heartbeat timeout and cleans up orphaned session records.</p>
+
+        <h3>Scenario C — Node failure</h3>
+        <p>The entire node goes offline. Kubernetes marks the node <code>NotReady</code> after the node heartbeat timeout (default 40s). Pods on that node are evicted and rescheduled. Sessions pinned to those pods are orphaned for up to 40s before the controller can detect and clean them up via stale detection.</p>
+      </div>
+    </div>
+
+    <!-- 4. Retry Safety -->
+    <div class="section" id="retry">
+      <div class="section-head"><div class="num">4</div><h2>Retry Safety Classification</h2></div>
+      <div class="section-body">
+        <p>Not all RPCs are equal. The key question when a stream breaks is: <strong>can the client safely reconnect and replay?</strong></p>
+
+        <h3>The Three Classes</h3>
+        <table>
+          <tr><th>Class</th><th>Definition</th><th>Examples</th><th>On reconnect</th></tr>
+          <tr>
+            <td><span class="badge safe">SAFE</span></td>
+            <td>Idempotent reads. The server has no mutable state from this stream. Replaying produces the same result.</td>
+            <td>Watch, List, Get, Subscribe (read-only)</td>
+            <td>Reconnect and re-subscribe freely. No coordination needed.</td>
+          </tr>
+          <tr>
+            <td><span class="badge cond">CONDITIONAL</span></td>
+            <td>Mutations with side effects. The server may have processed some messages before dying. Replay is safe only with a deduplication token.</td>
+            <td>Create, Update, Upsert</td>
+            <td>Reconnect with an idempotency key. Server checks if it already processed this request and returns the cached result.</td>
+          </tr>
+          <tr>
+            <td><span class="badge unsafe">UNSAFE</span></td>
+            <td>Stateful streaming writes. The server maintains ordered state across messages. Replay from any point may corrupt that state.</td>
+            <td>StreamIngest, StreamWrite, BidiChat, LogStream</td>
+            <td>Do not retry without application-level coordination. The client must know exactly which messages were acknowledged before reconnecting.</td>
+          </tr>
+        </table>
+
+        <h3>The Two Generals Problem</h3>
+        <p>The UNSAFE class is a direct consequence of the Two Generals Problem — a classic distributed systems impossibility result. Two generals need to coordinate an attack over an unreliable channel. Neither can be certain the other received their last message. In our context:</p>
+        <ul>
+          <li>The client sends message #47 to the server</li>
+          <li>The server processes it and is about to acknowledge</li>
+          <li>The pod dies before the acknowledgement is sent</li>
+          <li>The client doesn't know if message #47 was processed</li>
+          <li>Replaying message #47 may cause a duplicate</li>
+          <li>Not replaying may cause a gap</li>
+        </ul>
+        <p>There is no general solution. The application must choose: at-most-once (risk gaps) or at-least-once (risk duplicates), and design accordingly.</p>
+
+        <h3>Idempotency Keys (CONDITIONAL)</h3>
+        <p>The CONDITIONAL class solves the problem for mutations by requiring the client to generate a unique key per logical operation before sending it. The server stores a map of <code>idempotency_key → result</code>. On retry, the server checks the map and returns the cached result instead of re-executing.</p>
+        <div class="diagram">Client                              Server
+  │                                    │
+  │── Create(key="abc-123", data=...) ─►│ processes, stores result
+  │◄─ OK (id=42) ──────────────────────│
+  │                                    │  ← pod dies
+  │── Create(key="abc-123", data=...) ─►│ new pod
+  │                                    │  checks: key "abc-123" exists?
+  │◄─ OK (id=42) ──────────────────────│  yes → return cached result
+  │                                    │  (no duplicate created)</div>
+
+        <div class="note"><strong>Default is UNSAFE</strong> — the classifier returns UNSAFE for any unrecognized method. This is the conservative choice. An unclassified stream is assumed stateful. You must explicitly opt in to SAFE or CONDITIONAL by adding a rule.</div>
+      </div>
+    </div>
+
+    <!-- 5. The Solution -->
+    <div class="section" id="solution">
+      <div class="section-head"><div class="num">5</div><h2>The Solution — A Session-Layer Controller</h2></div>
+      <div class="section-body">
+        <p>The controller sits between Kubernetes events and your application sessions. It watches for pod lifecycle changes and acts on them before the TCP connection is forcibly closed.</p>
+
+        <h3>Four responsibilities</h3>
+        <div class="compare" style="grid-template-columns:1fr 1fr">
+          <div class="compare-card">
+            <div class="ch">🔔 Drain</div>
+            <div class="cb"><p>On SIGTERM, notify all sessions on the dying pod. Give clients time to finish their current exchange and reconnect to a healthy pod before SIGKILL.</p></div>
+          </div>
+          <div class="compare-card">
+            <div class="ch">🔀 Rebind</div>
+            <div class="cb"><p>On rolling update, watch the Endpoints object. When a pod IP disappears, move pinned sessions to a surviving IP. The session follows the logical connection.</p></div>
+          </div>
+          <div class="compare-card">
+            <div class="ch">🏷 Classify</div>
+            <div class="cb"><p>Tag each session with its retry class. Downstream systems use this to decide whether to reconnect-and-replay, reconnect-with-dedup-token, or wait for application coordination.</p></div>
+          </div>
+          <div class="compare-card">
+            <div class="ch">💓 Heartbeat</div>
+            <div class="cb"><p>Track LastSeen per session. Detect orphaned sessions (pod crashed without drain) via stale timeout. Clean up ghost records that would otherwise accumulate.</p></div>
+          </div>
+        </div>
+
+        <h3>What the controller does NOT do</h3>
+        <ul>
+          <li>It does not proxy or intercept traffic — it is a control plane component, not a data plane proxy</li>
+          <li>It does not solve the Two Generals Problem for UNSAFE streams — it classifies them and defers to the application</li>
+          <li>It does not replace a service mesh (Istio, Linkerd) — it complements them at the session layer</li>
+          <li>It does not persist sessions across controller restarts (in the demo — a CRD extension point exists)</li>
+        </ul>
+
+        <h3>Relationship to service meshes</h3>
+        <p>A service mesh like Istio operates at layer 4/7 — it intercepts TCP connections and HTTP/gRPC traffic via sidecar proxies. It can handle retries, circuit breaking, and load balancing. But it operates at the connection level, not the session level. It doesn't know that a gRPC stream has sent 47 messages and is waiting for message 48. This controller fills that gap above the mesh.</p>
+        <div class="diagram">┌─────────────────────────────────────────────────────┐
+│  Application Layer (your code)                       │
+├─────────────────────────────────────────────────────┤
+│  Session Layer ← this controller                     │
+│  (drain, rebind, classify, heartbeat)                │
+├─────────────────────────────────────────────────────┤
+│  Service Mesh (Istio/Linkerd — optional)             │
+│  (mTLS, retries, circuit breaking, load balancing)   │
+├─────────────────────────────────────────────────────┤
+│  Kubernetes (Services, Endpoints, kube-proxy)        │
+│  (TCP routing, pod scheduling, health checks)        │
+└─────────────────────────────────────────────────────┘</div>
+      </div>
+    </div>
+
+    <!-- 6. Graceful Drain -->
+    <div class="section" id="drain">
+      <div class="section-head"><div class="num">6</div><h2>Graceful Drain — How It Works</h2></div>
+      <div class="section-body">
+        <h3>The drain window</h3>
+        <p>Kubernetes gives every pod a configurable window between SIGTERM and SIGKILL via <code>terminationGracePeriodSeconds</code> (default 30s). This is the only time available to drain sessions gracefully. The controller must complete its work within this window.</p>
+
+        <div class="diagram">t=0    SIGTERM received by pod
+  │
+  ├── DrainHandler.Handle() called
+  │   │
+  │   ├── t=0    Notify all sessions on this pod
+  │   │          gRPC: send GOAWAY frame
+  │   │          WebSocket: send 1001 Going Away close frame
+  │   │
+  │   ├── t=0.5s Poll: any sessions still open?
+  │   ├── t=1.0s Poll: any sessions still open?
+  │   ├── ...    (500ms interval)
+  │   │
+  │   ├── t=Xs   All sessions closed → clean drain ✅
+  │   │
+  │   └── t=30s  Deadline hit → force unregister remaining sessions
+  │
+t=30s  SIGKILL — OS closes all TCP connections</div>
+
+        <h3>gRPC GOAWAY</h3>
+        <p>gRPC runs over HTTP/2. HTTP/2 has a built-in graceful shutdown mechanism: the <code>GOAWAY</code> frame. When a server sends <code>GOAWAY</code>, it tells the client: "I am going away. Don't send new streams. Finish your current streams and reconnect to another server." The gRPC library on the client side handles this automatically — it stops sending new RPCs on this connection and reconnects to a new endpoint.</p>
+        <p>In Go, <code>grpc.Server.GracefulStop()</code> sends <code>GOAWAY</code> and waits for active RPCs to complete. This is the gRPC-native drain mechanism and is what the echoserver uses on SIGTERM.</p>
+
+        <h3>WebSocket close frame</h3>
+        <p>WebSocket has a similar mechanism: the close handshake. The server sends a close frame with status code <code>1001 Going Away</code>, the client acknowledges with its own close frame, and both sides close the TCP connection cleanly. A well-behaved client will then reconnect to a new endpoint.</p>
+
+        <h3>Why poll instead of waiting for callbacks?</h3>
+        <p>The drain handler polls every 500ms rather than waiting for sessions to call <code>Unregister</code>. Three reasons:</p>
+        <ul>
+          <li><strong>Crash safety</strong> — a session might crash without calling Unregister. Polling detects this.</li>
+          <li><strong>Deadline enforcement</strong> — the SIGKILL deadline must be respected regardless of session behavior. Polling enforces it.</li>
+          <li><strong>Simplicity</strong> — event-driven drain would require sessions to signal back to the controller, adding coupling. Polling is decoupled and predictable.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 7. Endpoint Rebinding -->
+    <div class="section" id="rebind">
+      <div class="section-head"><div class="num">7</div><h2>Endpoint Rebinding During Rollouts</h2></div>
+      <div class="section-body">
+        <h3>The sticky stream problem</h3>
+        <p>A gRPC stream or WebSocket connection is pinned to a specific pod IP. Kubernetes Services load-balance new connections across pods, but they don't move existing connections. During a rolling update, the old pod's IP is removed from the Endpoints object, but any client with an open connection to that IP is still connected — until the pod is killed.</p>
+
+        <h3>How the Endpoints object changes during a rollout</h3>
+        <div class="diagram">Before rollout:
+  Endpoints: 10.244.1.4:50051, 10.244.2.4:50051
+
+Step 1 — new pod starts, old pod gets SIGTERM:
+  Endpoints: 10.244.1.4:50051, 10.244.2.4:50051, 10.244.1.5:50051
+
+Step 2 — old pod removed from Endpoints (readiness probe fails on terminating pod):
+  Endpoints: 10.244.2.4:50051, 10.244.1.5:50051
+  ↑ 10.244.1.4 is gone — sessions pinned here need rebinding
+
+Step 3 — second old pod gets SIGTERM, new pod starts:
+  Endpoints: 10.244.2.4:50051, 10.244.1.5:50051, 10.244.2.5:50051
+
+Step 4 — rollout complete:
+  Endpoints: 10.244.1.5:50051, 10.244.2.5:50051</div>
+
+        <h3>How the EndpointWatcher responds</h3>
+        <p>The watcher receives an <code>UpdateFunc</code> event every time the Endpoints object changes. It diffs the old and new address sets. For every IP that was present before but is absent now, it finds all sessions pinned to that IP and calls <code>Rebind()</code>.</p>
+        <p><code>Rebind()</code> is an interface — the implementation depends on your transport:</p>
+        <ul>
+          <li><strong>gRPC</strong>: close the existing <code>ClientConn</code> and open a new one to the new IP. The gRPC client library handles the stream restart.</li>
+          <li><strong>WebSocket</strong>: send a close frame to the client with a redirect hint, or close the connection and let the client reconnect via the Service DNS name.</li>
+        </ul>
+
+        <h3>Shared informers vs polling the API</h3>
+        <p>The watcher uses a Kubernetes shared informer rather than polling the API server. A shared informer:</p>
+        <ul>
+          <li>Maintains a local in-memory cache of the watched resource</li>
+          <li>Uses a list+watch pattern — one initial list, then a persistent watch stream</li>
+          <li>Delivers events via a work queue, not a polling loop</li>
+          <li>Handles reconnection and cache resync automatically</li>
+          <li>Is shared across multiple controllers in the same process (no duplicate watches)</li>
+        </ul>
+        <p>This is the standard pattern for all Kubernetes controllers. It is efficient, reliable, and scales to large clusters.</p>
+      </div>
+    </div>
+
+    <!-- 8. Heartbeat -->
+    <div class="section" id="heartbeat">
+      <div class="section-head"><div class="num">8</div><h2>Heartbeat &amp; Stale Session Detection</h2></div>
+      <div class="section-body">
+        <h3>The orphan problem</h3>
+        <p>Drain and rebind handle planned events — SIGTERM and rolling updates. But pods can also die suddenly: OOMKilled, kernel panic, node failure. In these cases there is no SIGTERM, no drain window, no Endpoints update. The session record in the controller's registry becomes an orphan — it points to a pod that no longer exists.</p>
+
+        <h3>Heartbeat mechanism</h3>
+        <p>Each active session sends a periodic heartbeat to the controller (e.g., every 30s). The controller records <code>LastSeen = now()</code> on each heartbeat. A background goroutine periodically scans for sessions where <code>now() - LastSeen > TTL</code> and removes them.</p>
+        <div class="diagram">Session lifecycle with heartbeat:
+
+  register() → LastSeen = t0
+  heartbeat() → LastSeen = t0 + 30s
+  heartbeat() → LastSeen = t0 + 60s
+  ...
+  pod crashes → no more heartbeats
+  t0 + 90s + TTL → Stale() detects orphan → Unregister()</div>
+
+        <h3>Choosing the TTL</h3>
+        <p>The TTL should be long enough to survive transient network hiccups (a heartbeat that's a few seconds late) but short enough to clean up orphans before they accumulate. A reasonable default:</p>
+        <ul>
+          <li>Heartbeat interval: 30s</li>
+          <li>TTL: 90s (3 missed heartbeats)</li>
+          <li>Stale scan interval: 60s</li>
+        </ul>
+        <p>For node failure scenarios, the Kubernetes node heartbeat timeout (default 40s) plus pod eviction time means orphans may persist for 2-5 minutes. Size your TTL accordingly.</p>
+      </div>
+    </div>
+
+    <!-- 9. Tradeoffs -->
+    <div class="section" id="tradeoffs">
+      <div class="section-head"><div class="num">9</div><h2>Design Tradeoffs</h2></div>
+      <div class="section-body">
+        <table>
+          <tr><th>Decision</th><th>Choice made</th><th>Alternative</th><th>Why this choice</th></tr>
+          <tr>
+            <td>Session storage</td>
+            <td>In-memory map + RWMutex</td>
+            <td>CRD, etcd, Redis</td>
+            <td>Zero latency, no external dependency. Tradeoff: lost on controller restart. CRD extension point provided.</td>
+          </tr>
+          <tr>
+            <td>Drain polling</td>
+            <td>500ms ticker</td>
+            <td>Event-driven callbacks</td>
+            <td>Decoupled from session behavior. Enforces deadline regardless of session state. Simpler to reason about.</td>
+          </tr>
+          <tr>
+            <td>Retry default</td>
+            <td>UNSAFE</td>
+            <td>SAFE</td>
+            <td>Conservative. An unclassified stream is assumed stateful. Fail safe, not fail open.</td>
+          </tr>
+          <tr>
+            <td>Endpoint watch</td>
+            <td>v1 Endpoints informer</td>
+            <td>EndpointSlice informer</td>
+            <td>Simpler API. Deprecated in k8s 1.33+ — migration path documented.</td>
+          </tr>
+          <tr>
+            <td>Rebind target selection</td>
+            <td>First available new IP</td>
+            <td>Load-balanced selection</td>
+            <td>Demo simplicity. Production should use weighted round-robin or least-connections.</td>
+          </tr>
+          <tr>
+            <td>Drain notification</td>
+            <td>Interface (noopNotifier)</td>
+            <td>Hardcoded gRPC/WS</td>
+            <td>Transport-agnostic. Swap in your real implementation without changing the controller.</td>
+          </tr>
+        </table>
+
+        <h3>What this is not</h3>
+        <div class="danger"><strong>Not a data plane proxy</strong>This controller does not sit in the request path. It does not intercept, buffer, or replay messages. It is a control plane component that coordinates session lifecycle. The actual message transport is still between your client and server.</div>
+        <div class="warn"><strong>Not a solution to the Two Generals Problem</strong>For UNSAFE streams, the controller classifies the session and signals the client to not retry blindly. It does not solve the fundamental impossibility of knowing which messages were processed before the crash. That requires application-level sequence numbers and acknowledgements.</div>
+      </div>
+    </div>
+
+    <!-- 10. Further Reading -->
+    <div class="section" id="further">
+      <div class="section-head"><div class="num">10</div><h2>Further Reading</h2></div>
+      <div class="section-body">
+        <h3>Distributed systems theory</h3>
+        <ul>
+          <li><a href="https://en.wikipedia.org/wiki/Two_generals%27_problem" target="_blank">Two Generals Problem</a> — why UNSAFE streams can't safely retry</li>
+          <li><a href="https://en.wikipedia.org/wiki/Fallacies_of_distributed_computing" target="_blank">Fallacies of Distributed Computing</a> — the network is not reliable</li>
+          <li><a href="https://en.wikipedia.org/wiki/Session_layer" target="_blank">OSI Session Layer</a> — what this project implements</li>
+        </ul>
+        <h3>gRPC</h3>
+        <ul>
+          <li><a href="https://grpc.io/docs/what-is-grpc/core-concepts/" target="_blank">gRPC Core Concepts</a> — streams, metadata, deadlines</li>
+          <li><a href="https://httpwg.org/specs/rfc7540.html#GOAWAY" target="_blank">HTTP/2 GOAWAY frame (RFC 7540)</a> — graceful shutdown signal</li>
+          <li><a href="https://grpc.io/docs/guides/keepalive/" target="_blank">gRPC Keepalive</a> — detecting dead connections</li>
+        </ul>
+        <h3>Kubernetes</h3>
+        <ul>
+          <li><a href="https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/" target="_blank">Pod Lifecycle</a> — SIGTERM, grace periods, termination</li>
+          <li><a href="https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/" target="_blank">EndpointSlice</a> — the modern replacement for Endpoints</li>
+          <li><a href="https://pkg.go.dev/k8s.io/client-go/informers" target="_blank">client-go Shared Informers</a> — list+watch pattern</li>
+        </ul>
+        <h3>Idempotency</h3>
+        <ul>
+          <li><a href="https://stripe.com/docs/api/idempotent_requests" target="_blank">Stripe Idempotency Keys</a> — the CONDITIONAL retry pattern in production</li>
+          <li><a href="https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/" target="_blank">Making retries safe with idempotent APIs</a> — AWS Builders' Library</li>
+        </ul>
+        <div class="tip"><strong>Back to the code</strong> — <a href="index.html">index.html</a> has the full implementation walkthrough, architecture diagrams, and runbook.</div>
+      </div>
+    </div>
+
+  </article>
+</div>
+
+<footer>
+  <p>reddy73 / <a href="index.html">gRpc-ws-session-controller</a> &nbsp;·&nbsp; Built on kind 0.31.0 · Kubernetes 1.35.0 · Docker Desktop 28.0.4 · macOS</p>
+</footer>
+
+<script>
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      document.querySelectorAll('.toc-nav a').forEach(a => a.classList.remove('active'));
+      const link = document.querySelector(`.toc-nav a[href="#${e.target.id}"]`);
+      if (link) link.classList.add('active');
+    }
+  });
+}, { threshold: 0.3, rootMargin: '-60px 0px -60% 0px' });
+document.querySelectorAll('.section[id]').forEach(s => observer.observe(s));
+</script>
+</body>
+</html>
