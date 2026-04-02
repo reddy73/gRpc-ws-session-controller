@@ -32,9 +32,17 @@ public class SessionController {
         GrpcChannelRegistry  channels  = new GrpcChannelRegistry();
         RetryClassifier      classifier = new RetryClassifier(RetryClassifier.defaultRules());
 
-        // Real drain notifier — sends GOAWAY and waits for stream to finish
-        GrpcDrainNotifier drainNotifier = new GrpcDrainNotifier(channels, registry);
-        DrainHandler      drainHandler  = new DrainHandler(registry, drainNotifier);
+        WebSocketSessionRegistry wsRegistry = new WebSocketSessionRegistry();
+
+        // Unified notifier — dispatches to gRPC or WS based on session type
+        DrainHandler.DrainNotifier drainNotifier = (session, remainingMs) -> {
+            if (session.getType() == Session.Type.GRPC) {
+                new GrpcDrainNotifier(channels, registry).notify(session, remainingMs);
+            } else if (session.getType() == Session.Type.WEBSOCKET) {
+                new WebSocketDrainNotifier(wsRegistry, registry).notify(session, remainingMs);
+            }
+        };
+        DrainHandler drainHandler = new DrainHandler(registry, drainNotifier);
 
         EndpointWatcher.SessionRebinder rebinder = (session, oldEp, newEp) ->
             log.info(String.format("[rebind] session=%s %s -> %s",
@@ -67,6 +75,32 @@ public class SessionController {
 
         log.info("[controller] streaming session open target=" + ECHO_TARGET
                 + " sessions=" + registry.size());
+
+        // ── Optional: open a WebSocket session too ────────────────────────
+        String wsTarget = System.getenv().getOrDefault("WS_TARGET", "");
+        WebSocketEchoClient wsClient = null;
+        if (!wsTarget.isEmpty()) {
+            try {
+                String wsSessionId = "ws-session-1";
+                java.net.http.WebSocket wsConn = wsRegistry.connect(wsSessionId, wsTarget);
+
+                Session wsSession = new Session();
+                wsSession.setId(wsSessionId);
+                wsSession.setType(Session.Type.WEBSOCKET);
+                wsSession.setPodName(podName);
+                wsSession.setNamespace(namespace);
+                wsSession.setEndpoint(wsTarget);
+                wsSession.setRetryClass(Session.RetryClass.UNSAFE);
+                registry.register(wsSession);
+
+                wsClient = new WebSocketEchoClient(wsConn, wsSessionId);
+                wsClient.startStreaming(1000);
+                log.info("[controller] WS session open target=" + wsTarget
+                        + " sessions=" + registry.size());
+            } catch (Exception e) {
+                log.warning("[controller] WS connect failed: " + e.getMessage());
+            }
+        }
 
         // ── Kubernetes endpoint watcher ───────────────────────────────────
         try (KubernetesClient k8s = new KubernetesClientBuilder().build()) {
