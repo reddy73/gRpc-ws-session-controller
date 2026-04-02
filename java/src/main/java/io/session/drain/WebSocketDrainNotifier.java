@@ -1,12 +1,12 @@
-package io.session;
+package io.session.drain;
+
+import io.session.model.Session;
+import io.session.model.SessionRegistry;
+import io.session.transport.WebSocketSessionRegistry;
 
 import java.util.logging.Logger;
 
-/**
- * Real DrainNotifier for WebSocket sessions.
- * Mirrors GrpcDrainNotifier — sends 1001 Going Away close frame
- * instead of HTTP/2 GOAWAY, then unregisters the session.
- */
+/** Drains a WebSocket session by sending a 1001 Going Away close frame. */
 public class WebSocketDrainNotifier implements DrainHandler.DrainNotifier {
 
     private static final Logger log = Logger.getLogger(WebSocketDrainNotifier.class.getName());
@@ -21,24 +21,19 @@ public class WebSocketDrainNotifier implements DrainHandler.DrainNotifier {
 
     @Override
     public void notify(Session session, long remainingMs) throws Exception {
-        if (session.getType() != Session.Type.WEBSOCKET) {
-            log.info("[ws-drain] skipping non-WS session=" + session.getId());
-            return;
-        }
+        if (session.getType() != Session.Type.WEBSOCKET) return;
 
         if (!wsRegistry.has(session.getId())) {
-            log.warning("[ws-drain] no socket found for session=" + session.getId() + ", unregistering");
+            log.warning("[ws-drain] no socket for session=" + session.getId());
             sessions.unregister(session.getId());
             return;
         }
 
-        log.info("[ws-drain] sending 1001 Going Away session=" + session.getId()
-                + " endpoint=" + session.getEndpoint()
-                + " budget=" + remainingMs + "ms");
+        log.info("[ws-drain] 1001 Going Away session=" + session.getId()
+                + " endpoint=" + session.getEndpoint() + " budget=" + remainingMs + "ms");
 
         wsRegistry.drain(session.getId(), remainingMs);
-
         sessions.unregister(session.getId());
-        log.info("[ws-drain] session drained and unregistered=" + session.getId());
+        log.info("[ws-drain] drained session=" + session.getId());
     }
 }

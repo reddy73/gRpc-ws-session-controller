@@ -1,4 +1,7 @@
-package io.session;
+package io.session.drain;
+
+import io.session.model.Session;
+import io.session.model.SessionRegistry;
 
 import java.time.Instant;
 import java.util.List;
@@ -9,8 +12,8 @@ import java.util.logging.Logger;
 
 /**
  * Orchestrates graceful drain of sessions before pod termination.
- * Sends drain signals (gRPC GOAWAY / WS close frame) and waits for
- * sessions to close within the pod's termination deadline.
+ * Sends drain signals (gRPC GOAWAY / WS 1001 close frame) via DrainNotifier,
+ * then polls until all sessions close or the deadline expires.
  */
 public class DrainHandler {
 
@@ -25,13 +28,6 @@ public class DrainHandler {
         this.notifier = notifier;
     }
 
-    /**
-     * Handle a drain event for a specific pod.
-     *
-     * @param podName    pod being terminated
-     * @param namespace  pod namespace
-     * @param deadlineMs termination deadline in milliseconds
-     */
     public void handle(String podName, String namespace, long deadlineMs) {
         List<Session> sessions = registry.byPod(podName, namespace);
         if (sessions.isEmpty()) return;
@@ -44,18 +40,16 @@ public class DrainHandler {
         for (Session s : sessions) {
             long remaining = deadline.toEpochMilli() - Instant.now().toEpochMilli();
             if (remaining <= 0) {
-                log.warning("[drain] deadline exceeded, forcing close session=" + s.getId());
                 registry.unregister(s.getId());
                 continue;
             }
             try {
                 notifier.notify(s, remaining);
             } catch (Exception e) {
-                log.warning("[drain] notify error session=" + s.getId() + " err=" + e.getMessage());
+                log.warning("[drain] notify error session=" + s.getId() + " " + e.getMessage());
             }
         }
 
-        // Poll until all sessions drain or deadline expires
         scheduler.scheduleAtFixedRate(() -> {
             List<Session> remaining = registry.byPod(podName, namespace);
             if (remaining.isEmpty()) {
@@ -71,7 +65,7 @@ public class DrainHandler {
         }, 500, 500, TimeUnit.MILLISECONDS);
     }
 
-    /** Callback interface for sending drain signals to sessions */
+    /** Implemented by GrpcDrainNotifier and WebSocketDrainNotifier. */
     public interface DrainNotifier {
         void notify(Session session, long remainingMs) throws Exception;
     }
