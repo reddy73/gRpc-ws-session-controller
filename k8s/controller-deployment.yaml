@@ -54,6 +54,10 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+            - name: ECHO_TARGET
+              value: "echoserver.session-test.svc.cluster.local:50051"
+            - name: TARGET_POD
+              value: "myapp-pod-abc"
           resources:
             requests:
               cpu: 50m
