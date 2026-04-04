@@ -10,19 +10,56 @@ Topics: `kubernetes` `grpc` `websocket` `golang` `java` `session-management` `ki
 
 ## Table of Contents
 
-1. [Why this exists](#why-this-exists)
-2. [Does Istio fix this?](#does-istio-fix-this)
-3. [Architecture](#architecture)
-4. [Core concepts](#core-concepts)
-5. [Kubernetes manifests](#kubernetes-manifests)
-6. [Test infrastructure](#test-infrastructure)
-7. [Design decisions](#design-decisions)
-8. [Extension points](#extension-points)
-9. [Go Implementation](#go-implementation)
-10. [Java Implementation](#java-implementation)
-11. [Usage Guide](#usage-guide)
-12. [Runbook](#runbook)
-13. [Conceptual Overview](#conceptual-overview)
+1. [Real-world problems this solves](#real-world-problems-this-solves)
+2. [Why this exists](#why-this-exists)
+3. [Does Istio fix this?](#does-istio-fix-this)
+4. [Architecture](#architecture)
+5. [Core concepts](#core-concepts)
+6. [Kubernetes manifests](#kubernetes-manifests)
+7. [Test infrastructure](#test-infrastructure)
+8. [Design decisions](#design-decisions)
+9. [Extension points](#extension-points)
+10. [Go Implementation](#go-implementation)
+11. [Java Implementation](#java-implementation)
+12. [Usage Guide](#usage-guide)
+13. [Runbook](#runbook)
+14. [Conceptual Overview](#conceptual-overview)
+
+---
+
+## Real-world problems this solves
+
+Kubernetes was built for stateless HTTP where every request is self-contained. These are the failure modes that appear the moment you run anything that isn't.
+
+**Live trading platform — order stream drops mid-session**
+
+A trader has an open gRPC bidirectional stream for order entry. HPA scales down a pod at 3pm when load drops. The pod gets SIGKILL after 30s. The trader's stream dies mid-order. Did the last order go through or not? Without session awareness the client reconnects and replays — the order executes twice.
+
+With this project: the stream is classified `UNSAFE`. On SIGTERM the server sends GOAWAY. The client pauses, queries the server for the last acknowledged order sequence, confirms no gap, then reconnects cleanly from the right point.
+
+**Collaborative document editor — rolling deploy corrupts state**
+
+10 users are editing a document over WebSocket. A rolling update starts. The pod hosting their connections gets SIGTERM. Without drain, all 10 users get a sudden TCP RST. Some reconnect to the new pod and start sending edits. Some don't reconnect at all. The document state diverges.
+
+With this project: the pod sends `1001 Going Away` to all 10 connections before dying. Clients get a clean signal, finish their current operation, and reconnect to the new pod. Document state stays consistent.
+
+**Log ingestion pipeline — duplicate records after node failure**
+
+A service streams log events to a collector over gRPC. The node crashes (OOMKilled — no SIGTERM, no grace period). The client gets a sudden `RST_STREAM` and reconnects immediately, replaying from the last checkpoint. The collector on the new pod processes those events again. Downstream analytics double-counts them.
+
+With this project: the stream is classified `UNSAFE`. The client does not auto-reconnect. It waits for the application to confirm the server's last acknowledged sequence before resuming — preventing duplicates.
+
+**Metrics feed — reconnect storm on rolling deploy**
+
+100 browser clients are subscribed to a live metrics WebSocket feed. A rolling deploy happens. All 100 connections drop simultaneously. All 100 clients reconnect at the same time to the new pod — thundering herd.
+
+With this project: the stream is classified `SAFE` (read-only subscription). The server sends `1001 Going Away` per session. Clients reconnect gracefully and re-subscribe. No thundering herd, no gap in the feed.
+
+**HPA scale-down kills a pod with 50 active gRPC streams**
+
+HPA decides to scale from 5 pods to 3. It picks the oldest pod. That pod has 50 active streams. Without session awareness HPA just kills it. All 50 clients get errors.
+
+With this project: the `EndpointWatcher` detects the pod IP disappearing from the Endpoints object and rebinds all 50 sessions to surviving pods before the TCP connection is forcibly closed. The `DrainHandler` gives in-flight RPCs time to complete. The PDB config prevents HPA from killing more pods than the system can absorb.
 
 ---
 
@@ -357,62 +394,279 @@ epWatcher    := endpoint.NewWatcher(tracker, rebinder)
 
 ```
 java/src/main/java/io/session/
-├── Session.java           // domain model — enums + getters/setters
-├── SessionRegistry.java   // ConcurrentHashMap registry
-├── DrainHandler.java      // ScheduledExecutorService drain loop
-├── RetryClassifier.java   // record-based rule matching
-├── EndpointWatcher.java   // fabric8 Kubernetes client watcher
-└── SessionController.java // main entry point
+├── SessionController.java              // entry point — wires all packages
+├── model/
+│   ├── Session.java                    // domain model: Type, RetryClass enums + fields
+│   └── SessionRegistry.java           // ConcurrentHashMap registry
+├── drain/
+│   ├── DrainHandler.java              // ScheduledExecutorService drain loop + DrainNotifier interface
+│   ├── GrpcDrainNotifier.java         // sends HTTP/2 GOAWAY via channel.shutdown()
+│   └── WebSocketDrainNotifier.java    // sends WS 1001 Going Away close frame
+├── retry/
+│   └── RetryClassifier.java           // record-based rule matching, defaults to UNSAFE
+├── endpoint/
+│   └── EndpointWatcher.java           // fabric8 watcher + SessionRebinder interface
+├── transport/
+│   ├── GrpcChannelRegistry.java       // ManagedChannel map keyed by session ID
+│   ├── WebSocketSessionRegistry.java  // WebSocket map + close-future tracking
+│   ├── StreamingEchoClient.java       // real bidi gRPC stream to echoserver
+│   └── WebSocketEchoClient.java       // WS sender thread for drain testing
+├── client/
+│   ├── SessionAwareGrpcClient.java    // GOAWAY detection + retry-class-aware reconnect
+│   ├── SessionAwareWebSocketClient.java // 1001 Going Away + retry-class-aware reconnect
+│   └── ClientUsageExample.java        // runnable usage demo for all three retry classes
+└── sidecar/
+    ├── SidecarClient.java             // app-side REST client for the Go sidecar
+    └── SidecarDrainEndpoint.java      // JDK HttpServer that receives POST /drain from sidecar
 ```
 
 Dependencies: `io.fabric8:kubernetes-client:6.10.0`, `io.grpc:grpc-netty-shaded:1.62.2`, Java 21.
 
+### Session — domain model
+
+```java
+// io.session.model.Session
+public class Session {
+    public enum Type       { GRPC, WEBSOCKET }
+    public enum RetryClass { SAFE, UNSAFE, CONDITIONAL }
+
+    private String id;
+    private Type type;
+    private String podName;
+    private String namespace;
+    private String endpoint;
+    private Instant startedAt;   // set by SessionRegistry.register()
+    private Instant lastSeen;    // updated by SessionRegistry.heartbeat()
+    private RetryClass retryClass;
+    private Map<String, String> metadata;
+    // ... getters/setters
+}
+```
+
 ### SessionRegistry — ConcurrentHashMap
 
 ```java
+// io.session.model.SessionRegistry
 private final Map<String, Session> sessions = new ConcurrentHashMap<>();
+
+public void register(Session session)       // sets startedAt + lastSeen = now()
+public void heartbeat(String id)            // updates lastSeen = now()
+public void unregister(String id)
+public List<Session> byPod(String podName, String namespace)
+public List<Session> stale(long ttlSeconds) // sessions where lastSeen < now() - ttl
+public int size()
 ```
 
 Segment-level locking — concurrent reads never block each other. Compare to Go's explicit `sync.RWMutex`: Java is simpler to write correctly; Go gives finer control (hold lock across multiple operations atomically).
 
-### DrainHandler — ScheduledExecutorService
+### DrainHandler — one executor per drain invocation
 
 ```java
-scheduler.scheduleAtFixedRate(() -> {
-    List<Session> remaining = registry.byPod(podName, namespace);
-    if (remaining.isEmpty()) { scheduler.shutdown(); return; }
-    if (Instant.now().isAfter(deadline)) {
-        remaining.forEach(s -> registry.unregister(s.getId()));
-        scheduler.shutdown();
-    }
-}, 500, 500, TimeUnit.MILLISECONDS);
+// io.session.drain.DrainHandler
+public DrainHandler(SessionRegistry registry, DrainNotifier notifier)
+
+public void handle(String podName, String namespace, long deadlineMs)
+// Phase 1: notify all sessions synchronously (GOAWAY / WS close frame)
+// Phase 2: poll every 500ms in background until drained or deadline hit
+// One ScheduledExecutorService per handle() call — safe for concurrent pod drains
+// AtomicBoolean guard prevents late executions after cancel
+
+public interface DrainNotifier {
+    void notify(Session session, long remainingMs) throws Exception;
+}
 ```
 
-### RetryClassifier — Java records
+The drain loop uses a `ScheduledFuture<?>[]` self-reference trick to cancel itself from inside the task, and registers a JVM shutdown hook to clean up the executor if the process exits mid-drain.
+
+### GrpcDrainNotifier — HTTP/2 GOAWAY
 
 ```java
+// io.session.drain.GrpcDrainNotifier
+public GrpcDrainNotifier(GrpcChannelRegistry channels, SessionRegistry sessions)
+
+// notify() calls:
+//   channels.drain(sessionId, remainingMs)
+//     → channel.shutdown()           // sends HTTP/2 GOAWAY
+//     → channel.awaitTermination()   // waits for in-flight RPCs
+//     → channel.shutdownNow()        // force-close if timeout
+//   sessions.unregister(sessionId)
+```
+
+### WebSocketDrainNotifier — 1001 Going Away
+
+```java
+// io.session.drain.WebSocketDrainNotifier
+public WebSocketDrainNotifier(WebSocketSessionRegistry wsRegistry, SessionRegistry sessions)
+
+// notify() calls:
+//   wsRegistry.drain(sessionId, remainingMs)
+//     → ws.sendClose(1001, "pod terminating")
+//     → closeFuture.get(remainingMs)  // wait for close handshake
+//     → ws.abort()                    // force-close if timeout
+//   sessions.unregister(sessionId)
+```
+
+### RetryClassifier — Java records + pattern matching
+
+```java
+// io.session.retry.RetryClassifier
 public record Rule(String methodPattern, Session.RetryClass retryClass) {}
+
+public RetryClassifier(List<Rule> rules)
+public Session.RetryClass classify(String method)  // falls back to UNSAFE
 
 public static List<Rule> defaultRules() {
     return List.of(
         new Rule("*/Watch",   Session.RetryClass.SAFE),
-        new Rule("*/Stream*", Session.RetryClass.UNSAFE),
-        new Rule("*/Create",  Session.RetryClass.CONDITIONAL)
+        new Rule("*/List",    Session.RetryClass.SAFE),
+        new Rule("*/Get",     Session.RetryClass.SAFE),
+        new Rule("*/Create",  Session.RetryClass.CONDITIONAL),
+        new Rule("*/Update",  Session.RetryClass.CONDITIONAL),
+        new Rule("*/Stream*", Session.RetryClass.UNSAFE)
+        // unmatched → UNSAFE (conservative default)
     );
 }
 ```
 
-### EndpointWatcher — fabric8
+Pattern syntax: `*/MethodName` matches any service, `*/Prefix*` matches prefix.
+
+### EndpointWatcher — fabric8 + SessionRebinder
 
 ```java
-client.endpoints().inNamespace(namespace).watch(new Watcher<>() {
-    @Override public void eventReceived(Action action, Endpoints ep) {
-        if (action == Action.MODIFIED) reconcile(ep, namespace);
-    }
-    @Override public void onClose(WatcherException e) {
-        // fabric8 auto-reconnects on transient errors
-    }
-});
+// io.session.endpoint.EndpointWatcher
+public EndpointWatcher(SessionRegistry registry, SessionRebinder rebinder)
+
+public void watch(KubernetesClient client, String namespace)
+// Registers a fabric8 Watcher<Endpoints>
+// On MODIFIED: diffs lastKnownAddresses vs current IPs
+// For each removed IP: finds sessions byPod() and calls rebinder.rebind()
+
+public interface SessionRebinder {
+    void rebind(Session session, String oldEndpoint, String newEndpoint) throws Exception;
+}
+```
+
+`lastKnownAddresses` is a `ConcurrentHashMap<String, String>` (IP → podName). fabric8 auto-reconnects on transient watcher errors via `onClose(WatcherException)`.
+
+### GrpcChannelRegistry — ManagedChannel lifecycle
+
+```java
+// io.session.transport.GrpcChannelRegistry
+public ManagedChannel connect(String sessionId, String target)
+// ManagedChannelBuilder.forTarget(target).usePlaintext().build()
+
+public void drain(String sessionId, long remainingMs) throws InterruptedException
+// channel.shutdown() → awaitTermination(remainingMs) → shutdownNow() on timeout
+
+public void forceClose(String sessionId)  // shutdownNow()
+public boolean has(String sessionId)
+public int size()
+```
+
+### WebSocketSessionRegistry — close-future tracking
+
+```java
+// io.session.transport.WebSocketSessionRegistry
+public WebSocket connect(String sessionId, String wsUri) throws Exception
+// Stores both the WebSocket and a CompletableFuture<Void> per session
+
+public void drain(String sessionId, long remainingMs) throws Exception
+// ws.sendClose(1001, "pod terminating")
+// closeFuture.get(remainingMs) → ws.abort() on timeout
+
+public void forceClose(String sessionId)  // ws.abort()
+public boolean has(String sessionId)
+```
+
+### SessionAwareGrpcClient — GOAWAY detection
+
+```java
+// io.session.client.SessionAwareGrpcClient
+public SessionAwareGrpcClient(
+    String sessionId,
+    String target,
+    Session.RetryClass retryClass,
+    Consumer<ReconnectEvent> onReconnect)
+
+public void start()                    // builds channel, starts connectivity watcher
+public ManagedChannel channel()        // current live channel for building stubs
+public void reconnect(String dedupToken) // explicit reconnect for UNSAFE streams
+public void stop()
+```
+
+GOAWAY detection uses `channel.notifyWhenStateChanged()` — a one-shot listener that re-registers itself on each state transition. When the channel reaches `TRANSIENT_FAILURE` or `SHUTDOWN`:
+
+- `SAFE` → `scheduleReconnect(0ms)` → fires `onReconnect` with `event.safe() == true`
+- `CONDITIONAL` → `scheduleReconnect(500ms)` → fires `onReconnect` with `event.safe() == true`
+- `UNSAFE` → fires `onReconnect` with `event.safe() == false`, no automatic reconnect
+
+A `SessionHeaderInterceptor` attaches `x-session-id` as a gRPC metadata header on every call so the server can correlate the connection to a registry entry.
+
+```java
+public record ReconnectEvent(
+    String sessionId,
+    boolean safe,       // false = UNSAFE, application must coordinate
+    String dedupToken,  // non-null for CONDITIONAL retries
+    int attempt,
+    String reason
+) {}
+```
+
+### SessionAwareWebSocketClient — 1001 Going Away detection
+
+```java
+// io.session.client.SessionAwareWebSocketClient
+public SessionAwareWebSocketClient(
+    String sessionId,
+    String wsUri,
+    Session.RetryClass retryClass,
+    Consumer<String> onMessage,
+    Consumer<ReconnectEvent> onReconnect)
+
+public void connect() throws Exception
+public void send(String message)
+public void reconnect(String dedupToken) throws Exception  // explicit reconnect for UNSAFE
+public void stop()
+```
+
+The `WebSocket.Listener.onClose()` callback fires when status code `1001` is received. Behaviour mirrors `SessionAwareGrpcClient`: SAFE reconnects immediately, CONDITIONAL after 500ms, UNSAFE notifies the application and waits. `onError()` is treated as a `1001` disconnect. The `x-session-id` header is attached via `newWebSocketBuilder().header(...)`.
+
+### SessionController — wiring everything together
+
+```java
+// io.session.SessionController — entry point
+// Env vars: ECHO_TARGET (default localhost:50051), WS_TARGET (optional),
+//           NAMESPACE (default "default"), TARGET_POD
+
+SessionRegistry registry = new SessionRegistry();
+GrpcChannelRegistry grpcChannels = new GrpcChannelRegistry();
+WebSocketSessionRegistry wsRegistry = new WebSocketSessionRegistry();
+
+GrpcDrainNotifier grpcNotifier = new GrpcDrainNotifier(grpcChannels, registry);
+WebSocketDrainNotifier wsNotifier = new WebSocketDrainNotifier(wsRegistry, registry);
+
+// Unified notifier dispatches by session type
+DrainHandler.DrainNotifier notifier = (session, remainingMs) -> {
+    if (session.getType() == Session.Type.GRPC)           grpcNotifier.notify(session, remainingMs);
+    else if (session.getType() == Session.Type.WEBSOCKET) wsNotifier.notify(session, remainingMs);
+};
+DrainHandler drainHandler = new DrainHandler(registry, notifier);
+
+RetryClassifier classifier = new RetryClassifier(RetryClassifier.defaultRules());
+
+EndpointWatcher.SessionRebinder rebinder = (session, oldEp, newEp) ->
+    log.info("[rebind] session=" + session.getId() + " " + oldEp + " -> " + newEp);
+
+// Open gRPC session
+ManagedChannel channel = grpcChannels.connect("grpc-session-1", ECHO_TARGET);
+// ... build Session, registry.register(session), new StreamingEchoClient(channel, ...).startStreaming(1000)
+
+// Start Kubernetes endpoint watcher
+try (KubernetesClient k8s = new KubernetesClientBuilder().build()) {
+    new EndpointWatcher(registry, rebinder).watch(k8s, namespace);
+    drainHandler.handle(podName, namespace, 30_000);
+    grpcClient.awaitClose(35_000);
+}
 ```
 
 ---
@@ -438,29 +692,32 @@ Wire all components directly in your application. The controller runs in-process
 
 ```java
 // 1. Create registries
-SessionRegistry      registry     = new SessionRegistry();
-GrpcChannelRegistry  grpcChannels = new GrpcChannelRegistry();
-WebSocketSessionRegistry wsReg   = new WebSocketSessionRegistry();
+SessionRegistry          registry     = new SessionRegistry();
+GrpcChannelRegistry      grpcChannels = new GrpcChannelRegistry();
+WebSocketSessionRegistry wsReg        = new WebSocketSessionRegistry();
 
 // 2. Wire drain notifiers
+GrpcDrainNotifier      grpcNotifier = new GrpcDrainNotifier(grpcChannels, registry);
+WebSocketDrainNotifier wsNotifier   = new WebSocketDrainNotifier(wsReg, registry);
+
 DrainHandler.DrainNotifier notifier = (session, remainingMs) -> {
-    if (session.getType() == Session.Type.GRPC)
-        new GrpcDrainNotifier(grpcChannels, registry).notify(session, remainingMs);
-    else
-        new WebSocketDrainNotifier(wsReg, registry).notify(session, remainingMs);
+    if (session.getType() == Session.Type.GRPC)           grpcNotifier.notify(session, remainingMs);
+    else if (session.getType() == Session.Type.WEBSOCKET) wsNotifier.notify(session, remainingMs);
 };
 DrainHandler drain = new DrainHandler(registry, notifier);
 
 // 3. Open a gRPC channel and register the session
 ManagedChannel ch = grpcChannels.connect("session-1", "echoserver:50051");
 Session s = new Session();
-s.setId("session-1"); s.setType(Session.Type.GRPC);
-s.setPodName("my-pod"); s.setNamespace("default");
+s.setId("session-1");
+s.setType(Session.Type.GRPC);
+s.setPodName("my-pod");
+s.setNamespace("default");
 s.setEndpoint("echoserver:50051");
 s.setRetryClass(Session.RetryClass.UNSAFE);
-registry.register(s);
+registry.register(s);  // sets startedAt + lastSeen automatically
 
-// 4. On SIGTERM — fire drain
+// 4. On SIGTERM — fire drain (non-blocking, polls in background)
 Runtime.getRuntime().addShutdownHook(new Thread(() ->
     drain.handle("my-pod", "default", 25_000)));
 ```
@@ -475,45 +732,39 @@ SessionAwareGrpcClient client = new SessionAwareGrpcClient(
     "echoserver:50051",
     Session.RetryClass.SAFE,
     event -> {
-        // Called after automatic reconnect — just re-subscribe
-        log.info("reconnected attempt=" + event.attempt());
-        watchStub = EchoServiceGrpc.newStub(client.channel());
-        watchStub.watch(request, responseObserver); // re-subscribe
+        // event.safe() == true, event.attempt() == reconnect count
+        log.info("Watch stream reconnected attempt=" + event.attempt() + " — re-subscribing");
+        // Re-subscribe: call Watch() again on the new channel
+        // watchStub = EchoServiceGrpc.newStub(client.channel());
+        // watchStub.watch(request, responseObserver);
     }
 );
 client.start();
 ManagedChannel ch = client.channel(); // use for stubs
 ```
 
-> **SAFE behaviour** — on GOAWAY, `SessionAwareGrpcClient` reconnects immediately (0ms delay) and fires the callback. Your app just re-calls the Watch/List RPC on the new channel.
+> **SAFE behaviour** — on GOAWAY, `SessionAwareGrpcClient` reconnects immediately (0ms delay) and fires the callback with `event.safe() == true`. Your app just re-calls the Watch/List RPC on `client.channel()`.
 
 ### gRPC CONDITIONAL stream — Create / Update
 
 Mutations with side effects. Reconnect with an idempotency key so the server ignores duplicates.
 
 ```java
-AtomicReference<String> pendingKey = new AtomicReference<>();
+AtomicInteger seq = new AtomicInteger(0);
 
 SessionAwareGrpcClient client = new SessionAwareGrpcClient(
-    "create-session-1", "echoserver:50051",
+    "create-session-1",
+    "echoserver:50051",
     Session.RetryClass.CONDITIONAL,
     event -> {
-        String key = pendingKey.get(); // same key as original request
-        log.info("retrying with idempotency key=" + key);
-        createStub.create(
-            CreateRequest.newBuilder()
-                .setIdempotencyKey(key) // server deduplicates on this
-                .setData(pendingData)
-                .build(),
-            responseObserver
-        );
+        // event.safe() == true, event.dedupToken() == null (set your own key)
+        String dedupToken = "idempotency-key-" + seq.get();
+        log.info("Create stream reconnected — retrying with token=" + dedupToken);
+        // Retry the mutation with the same idempotency key
+        // createStub.create(request.toBuilder().setIdempotencyKey(dedupToken).build(), ...);
     }
 );
 client.start();
-
-// Before sending — store the key in case of reconnect
-pendingKey.set("idem-" + UUID.randomUUID());
-createStub.create(request, responseObserver);
 ```
 
 ### gRPC UNSAFE stream — StreamEcho / StreamIngest
@@ -521,38 +772,41 @@ createStub.create(request, responseObserver);
 Stateful streams. The client does NOT reconnect automatically. Your app must confirm the last acknowledged sequence number before resuming.
 
 ```java
-AtomicInteger lastAcked = new AtomicInteger(0);
-SessionAwareGrpcClient[] ref = new SessionAwareGrpcClient[1];
+AtomicInteger lastAckedSeq = new AtomicInteger(0);
 
-ref[0] = new SessionAwareGrpcClient(
-    "stream-session-1", "echoserver:50051",
+// Use a holder so the lambda can reference the client after construction
+class ClientHolder { SessionAwareGrpcClient client; }
+ClientHolder holder = new ClientHolder();
+
+holder.client = new SessionAwareGrpcClient(
+    "stream-session-1",
+    "echoserver:50051",
     Session.RetryClass.UNSAFE,
     event -> {
         if (!event.safe()) {
-            // 1. Stop sending new messages immediately
-            sender.pause();
+            // event.reason() == "UNSAFE stream disconnected — coordinate replay before reconnecting"
+            log.warning("UNSAFE stream disconnected at seq=" + lastAckedSeq.get()
+                    + " — pausing, waiting for application coordination");
 
-            // 2. Query server for last processed sequence number
-            int serverAck = queryServerLastAck("stream-session-1");
+            // 1. Stop sending new messages (application responsibility)
+            // 2. Query server for last acknowledged sequence number
+            int serverLastAck = queryServerLastAck("stream-session-1");
 
-            if (serverAck == lastAcked.get()) {
-                // 3. No gap — safe to resume from next message
-                ref[0].reconnect("resume-from-" + serverAck);
-                sender.resume();
+            if (serverLastAck == lastAckedSeq.get()) {
+                // Server processed everything — safe to resume
+                holder.client.reconnect("resume-from-" + serverLastAck);
             } else {
-                // 4. Gap detected — alert, do not auto-reconnect
-                alertOps("sequence mismatch client=" + lastAcked.get()
-                    + " server=" + serverAck);
+                log.severe("sequence mismatch — manual intervention required"
+                        + " clientAck=" + lastAckedSeq.get()
+                        + " serverAck=" + serverLastAck);
             }
         }
     }
 );
-ref[0].start();
+holder.client.start();
 
 // Track acks in your stream observer
-responseObserver = new StreamObserver<>() {
-    public void onNext(EchoResponse r) { lastAcked.set(r.getSeq()); }
-};
+// responseObserver.onNext(r) → lastAckedSeq.set(r.getSeq())
 ```
 
 > ⚠ **Two Generals Problem** — there is no automatic solution for UNSAFE streams. The app must decide: at-most-once (risk gaps) or at-least-once (risk duplicates). `queryServerLastAck()` is the coordination point.
@@ -562,15 +816,17 @@ responseObserver = new StreamObserver<>() {
 Read-only subscriptions — price feeds, live dashboards, event streams. Reconnect and re-subscribe freely.
 
 ```java
+// Constructor: (sessionId, wsUri, retryClass, onMessage, onReconnect)
 SessionAwareWebSocketClient ws = new SessionAwareWebSocketClient(
     "ws-feed-1",
-    "ws://echoserver:8080/prices",
+    "ws://echoserver:8080/stream",
     Session.RetryClass.SAFE,
-    message -> updateUI(message),          // onMessage
+    message -> log.info("ws received: " + message),   // onMessage
     event -> {
-        // Auto-reconnected — re-send subscription message
-        ws.send("{\"type\":\"subscribe\",\"symbols\":[\"AAPL\",\"GOOG\"]}");
-        log.info("re-subscribed attempt=" + event.attempt());
+        // event.safe() == true — auto-reconnected after 1001 Going Away
+        log.info("WS reconnected attempt=" + event.attempt() + " — re-subscribing to feed");
+        // Re-send subscription message after reconnect
+        // ws.send("{\"type\":\"subscribe\",\"channel\":\"prices\"}");
     }
 );
 ws.connect();
@@ -581,6 +837,8 @@ ws.connect();
 Stateful write streams — collaborative editing, order entry, log ingestion. Same coordination pattern as gRPC UNSAFE.
 
 ```java
+AtomicInteger localSeq = new AtomicInteger(0);
+
 SessionAwareWebSocketClient ws = new SessionAwareWebSocketClient(
     "ws-orders-1",
     "ws://echoserver:8080/orders",
@@ -589,9 +847,12 @@ SessionAwareWebSocketClient ws = new SessionAwareWebSocketClient(
     event -> {
         if (!event.safe()) {
             // 1001 Going Away received — do NOT auto-reconnect
+            // event.reason() == "UNSAFE stream — coordinate replay before reconnecting"
             int serverSeq = queryServerLastAck("ws-orders-1");
             if (serverSeq == localSeq.get()) {
-                ws.reconnect("resume-" + serverSeq); // explicit reconnect
+                try {
+                    ws.reconnect("resume-" + serverSeq); // explicit reconnect
+                } catch (Exception e) { log.severe("reconnect failed: " + e.getMessage()); }
             }
         }
     }
@@ -644,35 +905,47 @@ containers:
 
 ### Java app with sidecar
 
+The app uses `SidecarClient` to register sessions and `SidecarDrainEndpoint` to receive drain signals from the Go sidecar.
+
 ```java
-// 1. Start the drain endpoint — sidecar calls this on SIGTERM
+// 1. Start the drain endpoint — sidecar POSTs to /drain on SIGTERM
+//    Body: { "podName": "...", "namespace": "...", "deadlineMs": 30000 }
+//    Responds 202 Accepted immediately; drain polls in background
 SidecarDrainEndpoint endpoint = new SidecarDrainEndpoint(registry, drainHandler, 8080);
 endpoint.start();
+// Also exposes GET /health → { "status": "ok", "sessions": N }
 
 // 2. Connect to sidecar REST API
 SidecarClient sidecar = new SidecarClient("http://localhost:9090");
 
 // 3. When a gRPC stream opens — register with sidecar
 Session s = new Session();
-s.setId("stream-1"); s.setType(Session.Type.GRPC);
+s.setId("stream-1");
+s.setType(Session.Type.GRPC);
 s.setPodName(System.getenv("POD_NAME"));
 s.setNamespace(System.getenv("NAMESPACE"));
 s.setEndpoint("echoserver:50051");
 s.setRetryClass(Session.RetryClass.UNSAFE);
-sidecar.register(s);
+sidecar.register(s);  // POST /sessions
 
 // 4. Keep session alive with heartbeats
-sidecar.startHeartbeat("stream-1", 30, TimeUnit.SECONDS);
+sidecar.startHeartbeat("stream-1", 30, TimeUnit.SECONDS);  // POST /sessions/{id}/heartbeat
 
 // 5. When stream closes cleanly — unregister
-sidecar.unregister("stream-1");
+sidecar.unregister("stream-1");  // DELETE /sessions/stream-1
 
-// Sidecar REST API endpoints:
-// GET  localhost:9090/health
-// GET  localhost:9090/sessions
-// POST localhost:9090/sessions          ← register
-// DELETE localhost:9090/sessions/{id}   ← unregister
-// POST localhost:9090/sessions/{id}/heartbeat
+// 6. Shutdown the heartbeat scheduler on exit
+sidecar.shutdown();
+```
+
+Sidecar REST API:
+```
+GET    /health                          → { "status": "ok", "sessions": N }
+GET    /sessions                        → list all sessions
+POST   /sessions                        → register (body: Session JSON)
+DELETE /sessions/{id}                   → unregister
+POST   /sessions/{id}/heartbeat         → update lastSeen
+POST   /drain                           → trigger drain (called by sidecar on SIGTERM)
 ```
 
 ### HPA scale-down protection
